@@ -1,0 +1,503 @@
+image: "otcpkt.bj.intel.com/gitlab-ci/static_test_lts:0.1"
+#this line is only for test
+stages:
+  - bannedwordscan
+  - checkpatch
+  - default_x86_compile
+#use default allyes, allmod, allno config to run compile test on x86 ARCH 
+  - legacy_android_compile
+#use android specific config to run compile test on x86 ARCH, only for 4.9/android and 4.14/android
+  - clang_x86_compile
+  - default_arm64_compile
+#use arm64 comppile check for 5.4 and 5.10 kernels since they are used for Bay projects
+  - lts2020_merge_request
+  - lts2020_branch_update
+variables:
+  GIT_DEPTH: 1000
+
+commitmsg_scan:
+  stage: bannedwordscan
+  before_script:
+    - ls -la /build/tools/kernel-lts-staging/
+    - ls -la /build/tools/kernel-lts-staging/scripts/
+    - cp /build/tools/kernel-lts-staging/scripts/* .
+  script:
+    - 'echo "Previous revision: $CI_COMMIT_BEFORE_SHA"'
+    - 'echo "Merge request source branch: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"'
+    - 'echo "Merge request target branch: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME"'
+    - 'echo "Current revision: $CI_COMMIT_SHA"'
+    - 'echo "Merge source sha: $CI_MERGE_REQUEST_SOURCE_BRANCH_SHA"'
+    - 'echo "Merge target sha: $CI_MERGE_REQUEST_TARGET_BRANCH_SHA"'
+    - make mrproper
+    - git fetch --all
+    - SOURCE_BRANCH_SHA=$(git rev-parse origin/$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME)
+    - TARGET_BRANCH_SHA=$(git rev-parse origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME)
+    - git log origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME..origin/$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME | tee cmt_msg.log
+    - python3 banned_word_scan.py cmt_msg.log
+  tags:
+    - lts2019
+  rules:
+    - if: '$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME !~ /stable_update/ && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^(4.9|4.14|4.19|5.4|5.10)\/(android|base|yocto|preempt-rt|xenomai|adl)/'
+      when: always
+    - if: '$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME !~ /stable_update/ && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^(IKT)\/(v5.10)/'
+      when: always
+
+checkpatch:
+  stage: checkpatch
+  before_script:
+    - ls -la /build/tools/kernel-lts-staging/
+    - ls -la /build/tools/kernel-lts-staging/scripts/
+    - cp /build/tools/kernel-lts-staging/scripts/* . 
+  script:
+    - make mrproper
+    - git fetch --all
+    - git format-patch origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME..origin/$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME
+    - ./scripts/checkpatch.pl --ignore gerrit_change_id --no-signoff *.patch | tee checkpatch.log || echo "Done!"
+    - python3 checkpatch_parser.py checkpatch.log
+  artifacts:
+    paths:
+      - checkpatch.log
+    when: always
+  tags:
+    - lts2019
+  rules:
+    - if: '$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME !~ /stable_update/ && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^(4.9|4.14|4.19|5.4|5.10)\/(android|base|yocto|preempt-rt|xenomai|adl)/'
+      when: always
+    - if: '$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME !~ /stable_update/ && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^(IKT)\/(v5.10)/'
+      when: always
+
+compile_allyesconfig:
+  stage: default_x86_compile
+  before_script:
+    - ls -la /build/tools/kernel-lts-staging/
+    - ls -la /build/tools/kernel-lts-staging/scripts/
+    - apt-get update && apt-get -y -q upgrade
+    - apt-get -y -q install bc build-essential ccache gcc git wget xz-utils libncurses-dev flex
+    - apt-get -y -q install bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev
+    - apt-get -y -q install libiberty-dev autoconf cpio
+    - apt-get clean
+    - gcc -v
+    - which tee
+    - which cpio
+#install build tools for kernel in image
+  script:
+    - make mrproper
+    - make allyesconfig 2>&1 | tee mkcfg.log
+    - make -j 16 2>&1 | tee make.log
+    - echo $?
+  artifacts:
+    paths:
+      - mkcfg.log
+      - make.log
+    when: always
+  tags:
+    - lts2019
+  rules:
+    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^(4.19|5.4|5.10)\/(android|base|yocto|preempt-rt|xenomai|adl)/'
+      when: always
+    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^(4.9|4.14)\/(base|yocto|preempt-rt|xenomai)/'
+      when: always
+    - if: '$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME !~ /stable_update/ && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^(IKT)\/(v5.10)/'
+      when: always
+      #bypass 4.9 and 4.14 android compile
+compile_allmodconfig:
+  stage: default_x86_compile
+  before_script:
+    - ls -la /build/tools/kernel-lts-staging/
+    - ls -la /build/tools/kernel-lts-staging/scripts/
+    - apt-get update && apt-get -y -q upgrade
+    - apt-get -y -q install bc build-essential ccache gcc git wget xz-utils libncurses-dev flex
+    - apt-get -y -q install bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev
+    - apt-get -y -q install libiberty-dev autoconf cpio
+    - apt-get clean
+    - gcc -v
+    - which tee
+    - which cpio
+#install build tools for kernel in image
+  script:
+    - make mrproper
+    - make allmodconfig 2>&1 | tee mkcfg_allmod.log
+    - make -j 16 2>&1 | tee make_allmod.log
+    - echo $?
+  artifacts:
+    paths:
+      - mkcfg_allmod.log
+      - make_allmod.log
+    when: always
+  tags:
+    - lts2019
+  rules:
+    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^(4.19|5.4|5.10)\/(android|base|yocto|preempt-rt|xenomai|adl)/'
+      when: always
+    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^(4.9|4.14)\/(base|yocto|preempt-rt|xenomai)/'
+      when: always
+      #bypass 4.9 and 4.14 android compile
+    - if: '$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME !~ /stable_update/ && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^(IKT)\/(v5.10)/'
+      when: always
+compile_allnoconfig:
+  stage: default_x86_compile
+  before_script:
+    - ls -la /build/tools/kernel-lts-staging/
+    - ls -la /build/tools/kernel-lts-staging/scripts/
+    - apt-get update && apt-get -y -q upgrade
+    - apt-get -y -q install bc build-essential ccache gcc git wget xz-utils libncurses-dev flex
+    - apt-get -y -q install bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev
+    - apt-get -y -q install libiberty-dev autoconf cpio
+    - apt-get clean
+    - gcc -v
+    - which tee
+    - which cpio
+#install build tools for kernel in image
+  script:
+    - make mrproper
+    - make allnoconfig 2>&1 | tee mkcfg_allno.log
+    - make -j 16 2>&1 | tee make_allno.log
+    - echo $?
+  artifacts:
+    paths:
+      - mkcfg_allno.log
+      - make_allno.log
+    when: always
+  tags:
+    - lts2019
+  rules:
+    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^(4.19|5.4|5.10)\/(android|base|yocto|preempt-rt|xenomai|adl)/'
+      when: always
+    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^(4.9|4.14)\/(base|yocto|preempt-rt|xenomai)/'
+      when: always
+      #bypass 4.9 and 4.14 android compile
+    - if: '$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME !~ /stable_update/ && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^(IKT)\/(v5.10)/'
+      when: always
+
+
+compile_androidconfig_4.9:
+  stage: legacy_android_compile
+  before_script:
+    - apt-get update && apt-get -y -q upgrade
+    - apt-get -y -q install bc build-essential ccache gcc git wget xz-utils libncurses-dev flex
+    - apt-get -y -q install bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev
+    - apt-get -y -q install libiberty-dev autoconf cpio
+    - apt-get clean
+    - gcc -v
+    - which tee
+    - which cpio
+    - echo "Clone android config"
+    - rm -rf /build/tools/kernel-config || echo "Remove previous cloned kernel-config repo"
+    - git clone https://kernel-lts-staging_ci_android_build:eCEd2qm_aKHGVxC1s1oe@gitlab.devtools.intel.com/linux-kernel-integration/kernel-config.git /build/tools/kernel-config
+    - cd /build/tools/kernel-config
+    - git fetch --all && git checkout 4.9/config
+    - cd -
+    - echo "Current directory" && pwd
+    - cp /build/tools/kernel-config/bxt/android/x86_64_defconfig android_defconfig
+    - echo "Android config ready"
+  script:
+    - make mrproper
+    - ./scripts/kconfig/merge_config.sh android_defconfig | tee mkcfg_android.log
+    - make -j 16 2>&1 | tee make_android.log
+  artifacts:
+    paths:
+      - mkcfg_android.log
+      - make_android.log
+    when: always
+  tags:
+    - lts2019
+  rules:
+    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^4.9\/android/'
+      when: always
+compile_androidconfig_4.14:
+  stage: legacy_android_compile
+  before_script:
+    - apt-get update && apt-get -y -q upgrade
+    - apt-get -y -q install bc build-essential ccache gcc git wget xz-utils libncurses-dev flex
+    - apt-get -y -q install bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev
+    - apt-get -y -q install libiberty-dev autoconf cpio
+    - apt-get clean
+    - gcc -v
+    - which tee
+    - which cpio
+    - echo "Clone android config"
+    - rm -rf /build/tools/kernel-config || echo "Remove previous cloned kernel-config repo"
+    - git clone https://kernel-lts-staging_ci_android_build:eCEd2qm_aKHGVxC1s1oe@gitlab.devtools.intel.com/linux-kernel-integration/kernel-config.git /build/tools/kernel-config
+    - cd /build/tools/kernel-config
+    - git fetch --all && git checkout 4.14/config
+    - cd -
+    - echo "Current directory" && pwd
+    - cp /build/tools/kernel-config/bxt/android/x86_64_defconfig android_defconfig
+    - echo "Android config ready"
+  script:
+    - make mrproper
+    - ./scripts/kconfig/merge_config.sh android_defconfig | tee mkcfg_android.log
+    - make -j 16 2>&1 | tee make_android.log
+  artifacts:
+    paths:
+      - mkcfg_android.log
+      - make_android.log
+    when: always
+  tags:
+    - lts2019
+  rules:
+    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^4.14\/android/'
+      when: always
+clang_compile_allyesconfig:
+  stage: clang_x86_compile
+  before_script:
+    - ls -la /build/tools/kernel-lts-staging/
+    - ls -la /build/tools/kernel-lts-staging/scripts/
+    - apt-get update
+    - apt-get -y -q install bc build-essential ccache git wget xz-utils libncurses-dev flex
+    - apt-get -y -q install bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev
+    - apt-get -y -q install libiberty-dev autoconf cpio
+    - apt-get clean
+    - export PATH=$PATH:/usr/lib/llvm-10/bin
+    - clang --version
+    - which tee
+#install build tools for kernel in image
+  script:
+    - make mrproper
+    - make ARCH=x86_64 CC=clang HOSTCC=clang allyesconfig 2>&1 | tee clang_mkcfg.log
+    - make ARCH=x86_64 CC=clang HOSTCC=clang -j 16 2>&1 | tee clang_make.log
+    - echo $?
+  artifacts:
+    paths:
+      - clang_mkcfg.log
+      - clang_make.log
+    when: always
+  tags:
+    - lts2019
+  rules:
+    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^(4.19|5.10)\/(android_r|android_civ)/'
+      when: always
+clang_compile_allmodconfig:
+  stage: clang_x86_compile
+  before_script:
+    - ls -la /build/tools/kernel-lts-staging/
+    - ls -la /build/tools/kernel-lts-staging/scripts/
+    - apt-get update
+    - apt-get -y -q install bc build-essential ccache git wget xz-utils libncurses-dev flex
+    - apt-get -y -q install bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev
+    - apt-get -y -q install libiberty-dev autoconf cpio
+    - apt-get clean
+    - export PATH=$PATH:/usr/lib/llvm-10/bin
+    - clang --version
+    - which tee
+#install build tools for kernel in image
+  script:
+    - make mrproper
+    - make ARCH=x86_64 CC=clang HOSTCC=clang allmodconfig 2>&1 | tee clang_mkcfg_allmod.log
+    - make ARCH=x86_64 CC=clang HOSTCC=clang -j 16 2>&1 | tee clang_make_allmod.log
+    - echo $?
+  artifacts:
+    paths:
+      - clang_mkcfg_allmod.log
+      - clang_make_allmod.log
+    when: always
+  tags:
+    - lts2019
+  rules:
+    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^(4.19|5.10)\/(android_r|android_civ)/'
+      when: always
+clang_compile_allnoconfig:
+  stage: clang_x86_compile
+  before_script:
+    - ls -la /build/tools/kernel-lts-staging/
+    - ls -la /build/tools/kernel-lts-staging/scripts/
+    - apt-get update
+    - apt-get -y -q install bc build-essential ccache git wget xz-utils libncurses-dev flex
+    - apt-get -y -q install bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev
+    - apt-get -y -q install libiberty-dev autoconf cpio
+    - apt-get clean
+    - export PATH=$PATH:/usr/lib/llvm-10/bin
+    - clang --version
+    - which tee
+#install build tools for kernel in image
+  script:
+    - make mrproper
+    - make ARCH=x86_64 CC=clang HOSTCC=clang allnoconfig 2>&1 | tee clang_mkcfg_allno.log
+    - make ARCH=x86_64 CC=clang HOSTCC=clang -j 16 2>&1 | tee clang_make_allno.log
+    - echo $?
+  artifacts:
+    paths:
+      - clang_mkcfg_allno.log
+      - clang_make_allno.log
+    when: always
+  tags:
+    - lts2019
+  rules:
+    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^(4.19|5.10)\/(android_r|android_civ)/'
+      when: always
+
+
+scan_to_quilt:
+#Sample job for merge request pipeline
+  stage: lts2020_merge_request
+  before_script:
+    #- export LC_ALL=C
+    #- pip3 install -r /build/requirements.txt 
+    - pwd
+    - rm -rf ../lkit-dev-ops
+    #- ssh -f -N -L 3334:oak-pkpt.ostc.intel.com:5432 -o "IdentityFile ~/.ssh/postgres_rsa" postgres@oak-pkpt.ostc.intel.com
+    #- ps -aux | grep 3334
+    - git clone ssh://git@gitlab.devtools.intel.com:29418/linux-kernel-integration/lkit-dev-ops ../lkit-dev-ops
+  script:
+    - 'echo "Previous revision: $CI_COMMIT_BEFORE_SHA"'
+    - 'echo "Merge request source branch: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"'
+    - 'echo "Merge request target branch: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME"'
+    - 'echo "Current revision: $CI_COMMIT_SHA"'
+    - 'echo "Merge request labels: $CI_MERGE_REQUEST_LABELS"'
+    - 'echo "Merge request project ID: $CI_MERGE_REQUEST_PROJECT_ID"'
+    - 'echo "Merge request ID: $CI_MERGE_REQUEST_IID"'
+    - git fetch --all
+    - python3 --version
+    - cd ../lkit-dev-ops
+    - git checkout origin/sandbox/yifan/quilt1210
+    - source envs_for_testing.sh
+    - python3 testAndUpdateQuilt.py
+    - touch generate.log
+    - cd -
+    - rm -rf ../lkit-dev-ops
+    #- python3 get_mr_details.py mergerequest $CI_MERGE_REQUEST_PROJECT_ID $CI_MERGE_REQUEST_IID
+    #- git format-patch origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME..origin/$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME
+    #- ./testAndUpdateQuilt.sh *.patch | tee quiltgen.log
+  artifacts:
+    paths:
+      - generate.log
+    when: always
+  rules:
+#need update
+    - if: '$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME !~ /stable_update/ && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "5.10/yocto"'
+      when: always
+  tags:
+    - oak-05
+
+post_merge_quilt_deploy:
+#Sample job for branch update
+  stage: lts2020_branch_update
+  before_script:
+    #- export LC_ALL=C
+    #- pip3 install -r /build/requirements.txt
+    - pwd
+    - rm -rf ../lkit-dev-ops
+    #- ssh -f -N -L 3334:oak-pkpt.ostc.intel.com:5432 -o "IdentityFile ~/.ssh/postgres_rsa" postgres@oak-pkpt.ostc.intel.com
+    #- ps -aux | grep 3334
+    - git clone ssh://git@gitlab.devtools.intel.com:29418/linux-kernel-integration/lkit-dev-ops ../lkit-dev-ops
+  script:
+    - 'echo "Previous revision: $CI_COMMIT_BEFORE_SHA"'
+    - 'echo "Merge request source branch: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"'
+    - 'echo "Merge request target branch: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME"'
+    - 'echo "Current revision: $CI_COMMIT_SHA"'
+    - 'echo "Merge request labels: $CI_MERGE_REQUEST_LABELS"'
+    - 'echo "Merge request project ID: $CI_MERGE_REQUEST_PROJECT_ID"'
+    - 'echo "Merge request ID: $CI_MERGE_REQUEST_IID"'
+    - git fetch --all
+    - python3 --version
+    - cd ../lkit-dev-ops
+    - git checkout origin/sandbox/yifan/quilt1210
+    - source envs_for_testing_mr.sh
+    - python3 testAndUpdateQuilt-post-MR.py
+    - cd -
+    - rm -rf ../lkit-dev-ops
+    - touch generate.log
+    #- python3 get_mr_details.py mergerequest $CI_MERGE_REQUEST_PROJECT_ID $CI_MERGE_REQUEST_IID
+    #- git format-patch origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME..origin/$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME
+    #- ./testAndUpdateQuilt.sh *.patch | tee quiltgen.log
+  artifacts:
+    paths:
+      - generate.log
+    when: always
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "5.10/yocto"'
+      when: always
+  tags:
+    - oak-05
+    
+compile_allmodconfig_arm64:
+  stage: default_arm64_compile
+  tags:
+    - lts2019
+  before_script:
+    - apt-get update && apt-get -y -q upgrade
+    - apt-get -y -q install bc build-essential ccache gcc git wget xz-utils libncurses-dev flex
+    - apt-get -y -q install bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev
+    - apt-get -y -q install libiberty-dev autoconf cpio libyaml-dev gcc-aarch64-linux-gnu
+    - apt-get clean
+    - gcc -v
+    - which tee
+    - which cpio
+#install build tools for kernel in image
+  script:
+    - make distclean
+    - make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- allmodconfig 2>&1 | tee mkcfg_allmod_arm64.log
+    - make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j 16 2>&1 | tee make_allmod_arm64.log
+    - echo $?
+  artifacts:
+    paths:
+      - mkcfg_allmod_arm64.log
+      - make_allmod_arm64.log
+    when: always
+  rules:
+    - if: '$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME !~ /stable_update/ && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^(5.4|5.10)\/(android|base|yocto|preempt-rt|xenomai|adl)/'
+      when: always
+    - if: '$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME !~ /stable_update/ && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^(IKT)\/(v5.10)/'
+      when: always
+
+compile_allyesconfig_arm64:
+  stage: default_arm64_compile
+  tags:
+    - lts2019
+  before_script:
+    - apt-get update && apt-get -y -q upgrade
+    - apt-get -y -q install bc build-essential ccache gcc git wget xz-utils libncurses-dev flex
+    - apt-get -y -q install bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev
+    - apt-get -y -q install libiberty-dev autoconf cpio libyaml-dev gcc-aarch64-linux-gnu
+    - apt-get clean
+    - gcc -v
+    - which tee
+    - which cpio
+#install build tools for kernel in image
+  script:
+    - make distclean
+    - make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- allyesconfig 2>&1 | tee mkcfg_allyes_arm64.log
+    - make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu-  -j 16 2>&1 | tee make_allyes_arm64.log
+    - echo $?
+  artifacts:
+    paths:
+      - mkcfg_allyes_arm64.log
+      - make_allyes_arm64.log
+    when: always
+  rules:
+    - if: '$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME !~ /stable_update/ && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^(5.4|5.10)\/(android|base|yocto|preempt-rt|xenomai|adl)/'
+      when: always
+    - if: '$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME !~ /stable_update/ && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^(IKT)\/(v5.10)/'
+      when: always
+
+compile_allnoconfig_arm64:
+  stage: default_arm64_compile
+  tags:
+    - lts2019
+  before_script:
+    - apt-get update && apt-get -y -q upgrade
+    - apt-get -y -q install bc build-essential ccache gcc git wget xz-utils libncurses-dev flex
+    - apt-get -y -q install bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev
+    - apt-get -y -q install libiberty-dev autoconf cpio libyaml-dev gcc-aarch64-linux-gnu
+    - apt-get clean
+    - gcc -v
+    - which tee
+    - which cpio
+#install build tools for kernel in image
+  script:
+    - make distclean
+    - make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- allnoconfig 2>&1 | tee mkcfg_allno_arm64.log
+    - make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j 16 2>&1 | tee make_allno_arm64.log
+    - echo $?
+  artifacts:
+    paths:
+      - mkcfg_allno_arm64.log
+      - make_allno_arm64.log
+    when: always
+  rules:
+    - if: '$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME !~ /stable_update/ && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^(5.4|5.10)\/(android|base|yocto|preempt-rt|xenomai|adl)/'
+      when: always
+    - if: '$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME !~ /stable_update/ && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^(IKT)\/(v5.10)/'
+      when: always
+
+

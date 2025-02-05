@@ -1,0 +1,563 @@
+/*
+ * Jenkins file for Kernel LTS Staging Preintegration CI
+ */
+@Library(value='ikt-lib', changelog=false)_
+import GitHubAction
+import CITests
+
+/*
+ * Global constaint
+ */
+JOB_TIMEOUT = 360
+
+NODE_LABEL = "githubci"
+/* timeout in minute */
+DOCKER_IMG = "otcpkt.bj.intel.com/github-ci/ci.__SITE__:1.1"
+ANDR_DOCKER_IMG = "otcpkt.bj.intel.com/github-ci/ci-andr.__SITE__:0.8"
+DEVOPS_DOCKER_IMG = "otcpkt.bj.intel.com/github-ci/ci-devops.__SITE__:0.5"
+DOCKER_USR = "jenkins"
+DOCKER_OPT = "-v /home/${DOCKER_USR}:/home/${DOCKER_USR}"
+BASE_DIR = "/ci"
+DEVOPS_REPO_DIR = "${BASE_DIR}/devops"
+CI_BASEDIR = "${DEVOPS_REPO_DIR}/ci/github"
+CI_TESTCASES_DIR = "${CI_BASEDIR}/testcases"
+CI_COMMON_SCRIPTS_DIR = "${CI_BASEDIR}/scripts"
+KCFG_REPO_DIR = "${BASE_DIR}/kernel-config"
+
+/*
+ * Note that WORKSPACE is dynamically assigned value when
+ * node is dispatched to the specific job, so it cannot be
+ * part of the global variable such as BUILD_PATH
+ */
+BUILD_DIR = "build"
+
+/*
+ * Job log rules:
+ *   1. all logs should be placed in LOG_DIR
+ *   2. all logs should be suffixed with ".log"
+ *   3. clear old logs at the beginning of the job stage
+ *   4. call archive_joblog() at the end of the job stage
+ */
+LOG_DIR = "logs"
+/* bin path of coverity scan tool */
+COV_BIN = "/home/${DOCKER_USR}/bin/cov-analysis-linux64-latest/bin"
+
+DEVOPS_DB_HOST = "oak-pkpt.ostc.intel.com"
+DEVOPS_DB_PORT = "5432"
+/* local port that mapping to devops db port */
+LOC_DEVOPS_DB_PORT = "3339"
+DB_USR = "postgres"
+DB_USR_KEY = "~/.ssh/postgres_rsa"
+/* for github authentication */
+GITHUB_LOGIN = "sys-oak"
+
+/* for prepare_repo */
+COMMIT_LOG = "commit.log"
+CHKPATCH_DIR = "chkpatches"
+GITDATA_JSON = "gitdata.json"
+/* FIXME: move this into database */
+/* map the staging quilt branch to the reference branch in kernel source repo */
+QUILT_TO_REF_MAP = [
+    'bullpen/v5.15': [
+        'repo': 'https://github.com/intel-innersource/os.linux.kernel.kernel-lts-staging',
+        'branch': '5.15/linux',
+    ],
+    'bullpen/v5.10': [
+        'repo': 'https://github.com/intel-innersource/os.linux.kernel.kernel-lts-staging',
+        'branch': '5.10/yocto',
+    ],
+]
+
+/* naming for extra two test cases */
+GITPULL_TC_NAME = 'srcpull'
+GITPULL_STAGE_NAME = 'BUILD: ' + GITPULL_TC_NAME
+
+
+/*
+ * Global variables
+ */
+/*
+ * gitdata: git repo related data used by test cases
+ * json schema:
+ *     {
+ *         'baseline': 'v5.xx.*',
+ *         'files': {
+ *               'c': [...],
+ *               'all': [...],
+ *               'changed': [...],
+ *               'deleted': [...],
+ *         },
+ *         'github_url': ..,
+ *         'github_event_number': ..,
+ *         'github_head_ref': ...,
+ *         'github_base_ref': ...,
+ *         ...
+ *     }
+ */
+gitdata = null
+src_repo_path = null
+quilt_repo_path = null
+citests = new CITests(this, params.ci_testplan)
+ghaction = GitHubAction.get_action(this, params, citests)
+
+
+/*
+ * Functions
+ */
+/*
+ * set global variables/environment variables.
+ */
+def setenv() {
+    if ("PYTHONPATH" in env) {
+        env.PYTHONPATH = "${env.PYTHONPATH}:${DEVOPS_REPO_DIR}"
+    } else {
+        env.PYTHONPATH = "${DEVOPS_REPO_DIR}"
+    }
+    /*
+     * PATH cannot be passed to the shell inside the test case
+     * functions, so we have to export PATH again inside shell
+     */
+    env.PATH = "${env.PATH}:${COV_BIN}"
+    env.COV_BIN = COV_BIN
+    env.LOG_DIR = LOG_DIR
+    env.BUILD_DIR = BUILD_DIR
+    env.DEVOPS_REPO_DIR = DEVOPS_REPO_DIR
+    env.CI_TESTCASES_DIR = CI_TESTCASES_DIR
+    env.KCFG_REPO_DIR = KCFG_REPO_DIR
+    env.NODE_LABEL = NODE_LABEL
+    env.DOCKER_IMG = DOCKER_IMG
+    env.ANDR_DOCKER_IMG = ANDR_DOCKER_IMG
+    env.DEVOPS_DOCKER_IMG = DEVOPS_DOCKER_IMG
+    env.DOCKER_OPT = DOCKER_OPT
+}
+
+
+def prepare_repo(args, citests) {
+    /* populate the repo path */
+    def repo_path = "${WORKSPACE}/$args.github_repo_fullname"
+    def log_path = "${WORKSPACE}/${LOG_DIR}"
+    def chglst = "${log_path}/changed.tmp"
+    def log = "${log_path}/${GITPULL_TC_NAME}.log"
+    /* kernel source relative path */
+    def src_rpath = null
+    def checkout_ref = null
+    def quilt_ref = null
+    def range = null
+    def baseline = null
+    def dt_changed = false
+    def doc_changed = false
+    def c_changed = false
+
+    /* remove old logs */
+    sh "rm -rf ${log_path}; mkdir -p ${log_path}"
+
+    /* record BUILD: pull stage in citest object */
+    citests.add(GITPULL_TC_NAME, CITests.JOB_RST_PASS)
+
+    if (args.github_event_name == "pull_request") {
+        checkout_ref = args.github_head_ref
+        quilt_ref = args.github_base_ref
+        range = "${args.github_base_sha}..${args.github_head_sha}"
+    } else {
+        checkout_ref = args.github_ref
+        quilt_ref = args.github_ref
+        if (!args.github_before.startsWith("00000") && \
+            !args.github_sha.startsWith("00000")) {
+            range = "${args.github_before}..${args.github_sha}"
+        }
+    }
+    /* clone/fetch the code */
+    dir (repo_path) {
+        /* add prefix origin/ to checkout_ref */
+        checkout_ref = checkout_ref.replaceFirst(/^(origin\/|)/, "origin/")
+        gitutils.checkout(args.github_url, checkout_ref)
+    }
+
+    if (QUILT_TO_REF_MAP.containsKey(quilt_ref)) {
+        /* if contains, it must be a PR */
+
+        def src_head = null
+        /* global variable */
+        quilt_repo_path = repo_path
+        /* quilt relative path */
+        def src_url = QUILT_TO_REF_MAP[quilt_ref]['repo']
+        def src_ref = QUILT_TO_REF_MAP[quilt_ref]['branch']
+        /* kernel source relative path */
+        src_rpath = src_url.replaceFirst(/^.*\.com\//, "")
+        /* global variable */
+        src_repo_path = "$WORKSPACE/$src_rpath"
+
+        /* 
+         * execute represent_quilt() as a test case
+         */
+        /* checkout the source code ref branch and apply quilts */
+        src_head = gitutils.represent_quilt(src_url,
+                                            src_ref,
+                                            quilt_repo_path,
+                                            src_repo_path,
+                                            log)
+
+        /* generate commit log and related patch files */
+        mysh("""
+            cd $src_repo_path
+            mkdir $CHKPATCH_DIR
+            cd $quilt_repo_path
+            # get new/updated file list during the range and
+            #   1) copy these patches to source code repo folder
+            #      (for checkpatch)
+            #   2) cat header of each patch file in commit log
+            #      (for bannedwordscan)
+            # it must be a PR(rather a push) if checkout_ref
+            # is a quilt branch, so range is not null here
+            declare cmtlog=$src_repo_path/$COMMIT_LOG
+            declare ckpdir=$src_repo_path/$CHKPATCH_DIR
+            declare missed_in_series=false
+            declare has_empty=false
+            for p in \$(git show --pretty= \
+                                  --name-only \
+                                  --diff-filter=ACMRT $range 2>/dev/null | \
+                           grep -v 'patches\\/series' | sort -u); do
+                quilt header \
+                  --strip-diffstat \
+                  --strip-trailing-whitespace \$p | tee -a \$cmtlog
+                quilt files \$p | tee -a $chglst
+                # check the empty commit which causes checkpatch.pl unexpected quit
+                if [ -s \$p ]; then
+                    cp \$p \$ckpdir/
+                else
+                    echo "Error: empty commit found: \$p" | tee -a ${log}
+                    has_empty=true
+                fi
+                # check if the patch exists in series
+                declare pf=\$(basename \$p)
+                if (! grep -q "^\$pf" patches/series); then
+                    echo "Patch missed in series: \$p" | tee -a ${log}
+                    missed_in_series=true
+                fi
+            done
+            if [ "\$has_empty" == "true" ]; then
+                if [ "$args.allow_empty_commit" == "true" ]; then
+                    echo "Caution: empty commit will cause checkpatch.pl unexpected quit!" | \
+                      tee -a ${log}
+                else
+                    exit 1
+                fi
+            fi
+
+            # get new/changed patches by series and check their existence
+            declare missed_patch=false
+            for p in \$(git diff $range patches/series 2>/dev/null | \
+                          sed -rn '/^\\+[0-9]{4,}/s/^\\+//p' | \
+                            sed -r 's/\\s+\$//'); do
+                if [ ! -f "patches/\$p" ]; then
+                    echo "Missed patch: \$p" | tee -a ${log}
+                    missed_patch=true
+                fi
+            done
+            # refine the file list
+            if [ -f "$chglst" ]; then
+                sort -u $chglst > ${chglst}.tmp.\$\$
+                mv ${chglst}.tmp.\$\$ $chglst
+            fi
+            test "\$missed_patch" == "true" -o \
+                 "\$missed_in_series" == "true" && exit 11 || exit 0
+        """, true)
+
+        /*
+         * remove bannedwordscan, checkpatch from test_stages
+         * if there is no patch changed/added
+         */
+        if (! fileExists("$src_repo_path/$COMMIT_LOG")) {
+            /* patch related testcase list */
+            tee(log, "No commit log, skip bannedwordscan/checkpatch")
+            citests.skip(['bannedwordscan', 'checkpatch'])
+        }
+
+        /* save source branch head in database for pr import */
+        mysh("""
+          echo "Save source branch head in database for pr import"
+          cd ${DEVOPS_REPO_DIR}
+          git pull --quiet || :
+          git status
+
+          python3 ${CI_COMMON_SCRIPTS_DIR}/set_srcbrch_head.py \
+              ${args.github_prid} \
+              ${src_head}
+        """)
+    } else {
+        src_repo_path = repo_path
+        src_rpath = args.github_repo_fullname
+        if (!range) {
+            dir (src_repo_path) {
+                baseline = gitutils.get_baseline(args.github_ref)
+            }
+            range = "${baseline}..origin/${args.github_ref}"
+        }
+        gitlog_fmt = "Commit: %H%nAuthor: %an <%ae>%nSubject: %s%n%n%b"
+        mysh("""
+            cd $src_repo_path
+            git log -p -U0 --raw --format="$gitlog_fmt" $range | tee $COMMIT_LOG
+            git format-patch -o $CHKPATCH_DIR $range
+            declare has_empty=false
+            # check the empty commit which causes checkpatch.pl unexpected quit
+            for c in \$(git rev-list --no-merges $range 2>/dev/null); do
+                if [ -z "\$(git show \$c | git patch-id)" ]; then
+                    echo "Error: empty commit found: \$c" | tee -a ${log}
+                    has_empty=true
+                fi
+            done
+            #for p in $CHKPATCH_DIR/*.patch; do
+            #    if [ ! -s \$p ]; then
+            #        echo "Error: empty commit found: \$p" | tee -a ${log}
+            #        has_empty=true
+            #    fi
+            #done
+            if [ "\$has_empty" == "true" ]; then
+                if [ "$args.allow_empty_commit" == "true" ]; then
+                    echo "Caution: empty commit will cause checkpatch.pl unexpected quit!" | \
+                      tee -a ${log}
+                else
+                    exit 1
+                fi
+            fi
+
+            git show --pretty= --name-only $range | sort -u | tee $chglst
+        """, true)
+    }
+
+    /* prepare GITDATA_JSON */
+    dir(src_repo_path) {
+        gitdata = [
+            'files': [
+                'c': [],
+                'all': [],
+                'changed': [],
+                'deleted': [],
+            ],
+        ]
+        // deep copy params
+        for (arg in args) {
+            gitdata[arg.key] = arg.value
+        }
+        // refine the file lists
+        if (fileExists(chglst)) {
+            def file = readFile chglst
+            def lines = file.readLines()
+            lines.each {
+                /* skip the blank line */
+                if (it =~ /\S+/) {
+                    // check the file existence to decide
+                    // if it's a deleted or added/changed
+                    if (fileExists(it)) {
+                        gitdata['files']['changed'].add(it)
+                        if (it =~ /\.c$/) {
+                            gitdata['files']['c'].add(it)
+                            c_changed = true
+                        }
+                    } else {
+                        gitdata['files']['deleted'].add(it)
+                    }
+                    gitdata['files']['all'].add(it)
+
+                    // check if dt/doc changed
+                    if (it =~ /^Documentation\//) {
+                        doc_changed = true
+                    } else if (it =~ /^arch\/.*\/dts\//) {
+                        dt_changed = true
+                    }
+                }
+            }
+        }
+        if (! baseline) {
+            baseline = gitutils.get_baseline()
+        }
+        gitdata['baseline'] = baseline
+        writeJSON file: "./$GITDATA_JSON", json: gitdata
+    }
+
+    /* add dt/doc testcase dynamically if the related folder changed */
+    //if (dt_changed) {
+    //    citests.add('dtcheck')
+    //}
+    //if (doc_changed) {
+    //    citests.add('doccheck')
+    //}
+    /* if no c file changed, skip the coverity scan */
+    if (!c_changed) {
+        tee(log, "No *.c changed, skip coverityscan test cases")
+        citests.skip(['coverityscan', 'coverityscan_arm64'])
+    }
+
+    /*
+     * export some variables as env var so that the following
+     * test scripts can consume them:
+     *     COMMIT_LOG: bannedwordscan
+     *     CHKPATCH_DIR: checkpatch.py
+     *     GITDATA_JSON: all
+     */
+    env.COMMIT_LOG = COMMIT_LOG
+    env.CHKPATCH_DIR = CHKPATCH_DIR
+    env.GITDATA_JSON = GITDATA_JSON
+
+    /* artifact */
+    artifactory.upload(["$src_rpath/*.log", "$src_rpath/*.json"])
+}
+
+
+def prechk(args) {
+    mysh("""
+      echo ""
+      echo "====== Context information ======"
+      echo "Workspace: ${WORKSPACE}"
+      echo "Event name: ${args.github_event_name}"
+      echo "Event action: ${args.github_event_action}"
+      echo "Github URL: ${args.github_url}"
+      echo "Previous revision: ${args.github_before}"
+      echo "Current branch: ${args.github_ref}"
+      echo "Current revision: ${args.github_sha}"
+      echo "Pull request source branch: ${args.github_head_ref}"
+      echo "Pull request target branch: ${args.github_base_ref}"
+      echo "Pull source sha: ${args.github_head_sha}"
+      echo "Pull target sha: ${args.github_base_sha}"
+      echo ""
+      echo "====== Tools information ======"
+      git --version
+      gcc -v
+      which clang && clang --version
+      exit 0
+    """)
+}
+
+
+/*
+ * setup env vars for accessing devops db:
+ *   for jf site:
+ *     1. just set host and port
+ *   for other sites:
+ *     1. establish ssh tunnel to db server
+ *     2. set host and port
+ */
+def set_devopsdb_env () {
+    def site = utils.get_site_by_node(NODE_NAME)
+    def db_host = null
+    def db_port = null
+    if (site == 'jf') {
+        db_host = DEVOPS_DB_HOST
+        db_port = DEVOPS_DB_PORT
+    } else {
+        mysh("""
+          ssh -f -N \
+              -i ${DB_USR_KEY} \
+              -L ${LOC_DEVOPS_DB_PORT}:${DEVOPS_DB_HOST}:${DEVOPS_DB_PORT} \
+                ${DB_USR}@${DEVOPS_DB_HOST}
+        """)
+        db_host = "localhost"
+        db_port = LOC_DEVOPS_DB_PORT
+    }
+    env.DATABASE_HOST = db_host
+    env.DATABASE_PORT = db_port
+}
+
+
+/*
+ * Main workflow
+ */
+pipeline {
+  agent none
+
+  options {
+      // this pipeline can only run one instance at a time
+      //disableConcurrentBuilds()
+      timestamps ()
+      timeout(time: JOB_TIMEOUT, unit: 'MINUTES')
+  }
+
+  /* note: the variables defined here are all String class
+     define other types of data in "Global variables" section */
+  //environment {}
+  /*
+   * Parameters of main job
+   */
+
+  parameters {
+      string(name: 'github_event_name', description: 'From Github context: github.event_name', defaultValue: '')
+      string(name: 'github_repo_fullname', description: 'From Github Webhook: repo.full_name', defaultValue: '')
+      string(name: 'github_event_action', description: 'From Github context: github.event_action', defaultValue: '')
+      string(name: 'github_event_number', description: 'From Github context: github.event.pull_request.number', defaultValue: '')
+      string(name: 'github_prid', description: 'From Github context: github.event.pull_request.id', defaultValue: '')
+      string(name: 'github_url', description: 'From Github Webhook: repo.html_url', defaultValue: '')
+      string(name: 'github_before', description: 'From Github context: github.event_before', defaultValue: '')
+      string(name: 'github_ref', description: 'From Github context: github.ref', defaultValue: '')
+      string(name: 'github_sha', description: 'From Github context: github.sha', defaultValue: '')
+      string(name: 'github_head_ref', description: 'From Github context: github.head_ref', defaultValue: '')
+      string(name: 'github_base_ref', description: 'From Github context: github.base_ref', defaultValue: '')
+      string(name: 'github_head_sha', description: 'From Github context: github.event.pull_request.head_sha', defaultValue: '')
+      string(name: 'github_base_sha', description: 'From Github context: github.event.pull_request.base_sha', defaultValue: '')
+      string(name: 'github_labels', description: 'From Github Webhook: github.pull_request.labels', defaultValue: '')
+      string(name: 'ci_testplan', description: 'The list of test cases, separated by comma', defaultValue: '')
+      booleanParam(name: 'post_result', description: 'If it is set, the result would be posted in Github', defaultValue: true)
+      booleanParam(name: 'allow_empty_commit', description: 'Ignore empty commit error', defaultValue: false)
+  }
+
+  /*
+   * Stages(main workflow)
+   */
+  stages {
+    // note: jenkins doesn't support setting stage name with variable
+    stage('BUILD: srcpull') {
+      steps {
+        script {
+            ghaction.do_started(!params.post_result)
+        }
+        node(NODE_LABEL) {
+          withDockerContainer(
+            args: DOCKER_OPT,
+            image: utils.get_din_by_node(DOCKER_IMG, NODE_NAME)) {
+              script {
+                setenv()
+                prechk(params)
+                def log = null
+                try {
+                    prepare_repo(params, citests)
+                    log = utils.archive_joblog(CITests.JOB_RST_PASS)
+                    citests.update_result(GITPULL_TC_NAME,
+                                          CITests.JOB_RST_PASS,
+                                          GITPULL_STAGE_NAME,
+                                          log)
+                } catch(err) {
+                    print(err)
+                    log = utils.archive_joblog(CITests.JOB_RST_FAIL)
+                    citests.update_result(GITPULL_TC_NAME,
+                                          CITests.JOB_RST_FAIL,
+                                          GITPULL_STAGE_NAME,
+                                          log)
+                    sh "exit 1"
+                }
+                genTestStages(params, citests)
+                utils.stash_kernelsrc(src_repo_path)
+              }
+          }
+        }
+      }
+    } // end of stage-build-pull
+    stage('CI Parallel Jobs') {
+      steps {
+        script {
+          parallel citests.test_stages
+        }
+      }
+    } // end of stage-ci-parallel-jobs
+  } // end of stages
+
+  /*
+   * Post actions: post test result in Github
+   */
+  post {
+    always {
+        script {
+            triggerLogParser("ADM-LOG_PARSER")
+            ghaction.do_completed(!params.post_result)
+        }
+    }
+  }
+} // end of pipeline

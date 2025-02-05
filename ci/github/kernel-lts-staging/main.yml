@@ -1,0 +1,702 @@
+# This is a basic workflow to help you get started with Actions
+
+name: IKT CI - Kernel LTS Staging
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the main branch
+  pull_request:
+    branches:
+      - '[45].[0149]+/base**'
+      - '[45].[0149]+/yocto**'
+      - '[45].[0149]+/android**'
+      - '[45].[0149]+/preempt-rt**'
+      - '[45].[0149]+/xenomai**'
+      - '[45].[0149]+/adl**'
+      - IKT/v5.10**
+
+env:
+  docker_img: otcpkt.bj.intel.com/github-ci/ci.bj:0.3
+  andr_docker_img: otcpkt.bj.intel.com/github-ci/ci-andr.bj:0.3
+  devops_docker_img: otcpkt.bj.intel.com/github-ci/ci-devops.bj:0.3
+  docker_usr: jenkins
+  base_dir: /ci
+  jobs_dir: /ci/jobs
+  ci_repo_dir: /ci/gitlab-ci
+  scripts_dir: /ci/gitlab-ci/kernel-lts-staging/scripts
+  devops_repo_dir: /ci/devops
+  kcfg_repo_dir: /ci/kernel-config
+
+  cpus_per_job: 16
+  clang_opt: ARCH=x86_64 CC=clang HOSTCC=clang
+  arm64_opt: ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu-
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+
+  # Define filter rules here
+  prechk:
+    runs-on: [lts]
+    container:
+      image: otcpkt.bj.intel.com/github-ci/ci.bj:0.3
+      volumes:
+        - /home/jenkins:/home/jenkins
+      options: -w /ci/jobs -u jenkins
+    outputs:
+      re_all: ${{ steps.setout.outputs.re_all }}
+      re_ikt_v510: ${{ steps.setout.outputs.re_ikt_v510 }}
+      re_v5p: ${{ steps.setout.outputs.re_v5p }}
+      re_v419p: ${{ steps.setout.outputs.re_v419p }}
+      re_v4_noandr: ${{ steps.setout.outputs.re_v4_noandr }}
+      re_v4v5_andr: ${{ steps.setout.outputs.re_v4v5_andr }}
+      re_v414_andr: ${{ steps.setout.outputs.re_v414_andr }}
+      re_v49_andr: ${{ steps.setout.outputs.re_v49_andr }}
+      re_head_ref_stable: ${{ steps.setout.outputs.re_head_ref_stable }}
+    steps:
+      - uses: actions-ecosystem/action-regex-match@v2
+        id: re-all
+        with:
+          text: ${{ github.base_ref }}
+          regex: '^(4.9|4.14|4.19|5.4|5.10)\/(android[_qrciv]*|base|yocto|preempt-rt|xenomai|adl)(\/.*$|$)'
+
+      - uses: actions-ecosystem/action-regex-match@v2
+        id: re-ikt_v510
+        with:
+          text: ${{ github.base_ref }}
+          regex: '^(IKT)\/(v5.10)(\/.*$|$)'
+
+      - uses: actions-ecosystem/action-regex-match@v2
+        id: re-v5p
+        with:
+          text: ${{ github.base_ref }}
+          regex: '^(5.4|5.10)\/(android[_qrciv]*|base|yocto|preempt-rt|xenomai|adl)(\/.*$|$)'
+
+      - uses: actions-ecosystem/action-regex-match@v2
+        id: re-v419p
+        with:
+          text: ${{ github.base_ref }}
+          regex: '^(4.19|5.4|5.10)\/(android[_qrciv]*|base|yocto|preempt-rt|xenomai|adl)(\/.*$|$)'
+      - uses: actions-ecosystem/action-regex-match@v2
+        id: re-v4_noandr
+        with:
+          text: ${{ github.base_ref }}
+          regex: '^(4.9|4.14)\/(base|yocto|preempt-rt|xenomai)(\/.*$|$)'
+
+      - uses: actions-ecosystem/action-regex-match@v2
+        id: re-v4v5_andr
+        with:
+          text: ${{ github.base_ref }}
+          regex: '^(4.19|5.10)\/(android_q|android_r|android_civ)(\/.*$|$)'
+
+      - uses: actions-ecosystem/action-regex-match@v2
+        id: re-v414_andr
+        with:
+          text: ${{ github.base_ref }}
+          regex: '^4.14\/android(\/.*$|$)'
+
+      - uses: actions-ecosystem/action-regex-match@v2
+        id: re-v49_andr
+        with:
+          text: ${{ github.base_ref }}
+          regex: '^4.9\/android(\/.*$|$)'
+
+      - uses: actions-ecosystem/action-regex-match@v2
+        id: re-head_ref-stable
+        with:
+          text: ${{ github.head_ref }}
+          regex: 'stable_update'
+
+      # export precheck results as outputs so that other jobs can use them
+      - name: Set outputs
+        id: setout
+        run: |
+          echo "::set-output name=re_all::${{ steps.re-all.outputs.match }}"
+          echo "::set-output name=re_ikt_v510::${{ steps.re-ikt_v510.outputs.match }}"
+          echo "::set-output name=re_v5p::${{steps.re-v5p.outputs.match }}"
+          echo "::set-output name=re_v419p::${{steps.re-v419p.outputs.match }}"
+          echo "::set-output name=re_v4_noandr::${{ steps.re-v4_noandr.outputs.match }}"
+          echo "::set-output name=re_v4v5_andr::${{ steps.re-v4v5_andr.outputs.match }}"
+          echo "::set-output name=re_v414_andr::${{ steps.re-v414_andr.outputs.match }}"
+          echo "::set-output name=re_v49_andr::${{ steps.re-v49_andr.outputs.match }}"
+          echo "::set-output name=re_head_ref_stable::${{ steps.re-head_ref-stable.outputs.match }}"
+
+      - name: Context information
+        run: |
+          echo "Event name: ${{ github.event_name }}"
+          echo "Event action: ${{ github.event_action }}"
+          echo "Previous revision: ${{ github.event.before }}"
+          echo "Current branch: ${{ github.ref }}"
+          echo "Current revision: ${{ github.sha }}"
+          echo "Merge request source branch: ${{ github.head_ref }}"
+          echo "Merge request target branch: ${{ github.base_ref }}"
+          echo "Merge source sha: ${{ github.event.pull_request.head.sha }}"
+          echo "Merge target sha: ${{ github.event.pull_request.base.sha }}"
+
+      - name: Tools information
+        run: |
+          git --version
+          gcc -v
+          which clang && clang --version
+          exit 0
+
+
+  #
+  # Build/test jobs
+  #
+
+  # job: bannded word scan
+  bannedwordscan:
+    needs: prechk
+    if: |
+      needs.prechk.outputs.re_head_ref_stable == '' &&
+      ( needs.prechk.outputs.re_all != '' || needs.prechk.outputs.re_ikt_v510 != '' )
+    # The type of runner that the job will run on
+    runs-on: [lts]
+    container:
+      image: otcpkt.bj.intel.com/github-ci/ci.bj:0.3
+      volumes:
+        - /home/jenkins:/home/jenkins
+      options: -w /ci/jobs -u jenkins
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Fetch the latest CI scripts
+        shell: bash
+        run: |
+          cd /ci/gitlab-ci
+          git pull
+          git status
+          ls -laR
+
+      - name: Main
+        shell: bash
+        run: |
+          # pwd is $GITHUB_WORKSPACE at beginning of 'run'
+          make mrproper
+          git fetch --all
+          #SOURCE_BRANCH_SHA=$(git rev-parse origin/${{ github.head_ref }}
+          #TARGET_BRANCH_SHA=$(git rev-parse origin/${{ github.base_ref }}
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+              range=origin/${{ github.base_ref }}..origin/${{ github.head_ref }}
+          else
+              range=${{ github.event.before }}..${{ github.sha }}
+          fi
+          git log $range | tee cmt_msg.log
+          python3 /ci/gitlab-ci/kernel-lts-staging/scripts/banned_word_scan.py cmt_msg.log
+
+  # job: checkpatch
+  checkpatch:
+    needs: prechk
+    if: |
+      needs.prechk.outputs.re_head_ref_stable == '' &&
+      ( needs.prechk.outputs.re_all != '' || needs.prechk.outputs.re_ikt_v510 != '' )
+    # The type of runner that the job will run on
+    runs-on: [lts]
+    container:
+      image: otcpkt.bj.intel.com/github-ci/ci.bj:0.3
+      volumes:
+        - /home/jenkins:/home/jenkins
+      options: -w /ci/jobs -u jenkins
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Fetch the latest CI scripts
+        shell: bash
+        run: |
+          cd /ci/gitlab-ci
+          git pull
+          git status
+          ls -laR
+
+      - name: Main
+        shell: bash
+        run: |
+          make mrproper
+          git fetch --all
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+              range=origin/${{ github.base_ref }}..origin/${{ github.head_ref }}
+          else
+              range=${{ github.event.before }}..${{ github.sha }}
+          fi
+          git format-patch $range
+          ./scripts/checkpatch.pl --ignore gerrit_change_id --no-signoff *.patch | tee checkpatch.log || echo "Done!"
+          python3 /ci/gitlab-ci/kernel-lts-staging/scripts/checkpatch_parser.py checkpatch.log
+
+      - name: Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: log
+          path: checkpatch.log
+
+  # job: compile_allyesconfig
+  compile_allyesconfig:
+    needs: prechk
+    if: |
+      needs.prechk.outputs.re_v419p != '' ||
+      needs.prechk.outputs.re_v4_noandr != '' ||
+      ( needs.prechk.outputs.re_head_ref_stable == '' &&
+        needs.prechk.outputs.re_ikt_v510 != '' )
+    # The type of runner that the job will run on
+    runs-on: [lts]
+    container:
+      image: otcpkt.bj.intel.com/github-ci/ci.bj:0.3
+      volumes:
+        - /home/jenkins:/home/jenkins
+      options: -w /ci/jobs -u jenkins
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Main
+        shell: bash
+        run: |
+          make mrproper
+          make allyesconfig 2>&1 | tee mkcfg.log
+          make -j 16 2>&1 | tee make.log
+          echo $?
+
+      - name: Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: log
+          path: |
+            mkcfg.log
+            make.log
+
+
+  # job: compile_allmodconfig
+  compile_allmodconfig:
+    needs: prechk
+    if: |
+      needs.prechk.outputs.re_v419p != '' ||
+      needs.prechk.outputs.re_v4_noandr != '' ||
+      ( needs.prechk.outputs.re_head_ref_stable == '' &&
+        needs.prechk.outputs.re_ikt_v510 != '' )
+    # The type of runner that the job will run on
+    runs-on: [lts]
+    container:
+      image: otcpkt.bj.intel.com/github-ci/ci.bj:0.3
+      volumes:
+        - /home/jenkins:/home/jenkins
+      options: -w /ci/jobs -u jenkins
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Main
+        shell: bash
+        run: |
+          make mrproper
+          make allmodconfig 2>&1 | tee mkcfg_allmod.log
+          make -j 16 2>&1 | tee make_allmod.log
+          echo $?
+
+      - name: Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: log
+          path: |
+            mkcfg_allmod.log
+            make_allmod.log
+
+  # job: compile_allnoconfig
+  compile_allnoconfig:
+    needs: prechk
+    if: |
+      needs.prechk.outputs.re_v419p != '' ||
+      needs.prechk.outputs.re_v4_noandr != '' ||
+      ( needs.prechk.outputs.re_head_ref_stable == '' &&
+        needs.prechk.outputs.re_ikt_v510 != '' )
+    # The type of runner that the job will run on
+    runs-on: [lts]
+    container:
+      image: otcpkt.bj.intel.com/github-ci/ci.bj:0.3
+      volumes:
+        - /home/jenkins:/home/jenkins
+      options: -w /ci/jobs -u jenkins
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Main
+        shell: bash
+        run: |
+          make mrproper
+          make allnoconfig 2>&1 | tee mkcfg_allno.log
+          make -j 16 2>&1 | tee make_allno.log
+          echo $?
+
+      - name: Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: log
+          path: |
+            mkcfg_allno.log
+            make_allno.log
+
+  # job: compile_androidconfig_49
+  compile_androidconfig_49:
+    needs: prechk
+    if: needs.prechk.outputs.re_v49_andr != ''
+    # The type of runner that the job will run on
+    runs-on: [lts]
+    container:
+      image: otcpkt.bj.intel.com/github-ci/ci.bj:0.3
+      volumes:
+        - /home/jenkins:/home/jenkins
+      options: -w /ci/jobs -u jenkins
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Fetch the latest kernel-config
+        shell: bash
+        run: |
+          cd /ci/kernel-config
+          git fetch --all && git checkout 4.9/config
+          cp bxt/android/x86_64_defconfig $GITHUB_WORKSPACE/android_defconfig
+          echo "Android config ready"
+
+      - name: Main
+        shell: bash
+        run: |
+          make mrproper
+          ./scripts/kconfig/merge_config.sh android_defconfig | tee mkcfg_android.log
+          make -j 16 2>&1 | tee make_android.log
+
+      - name: Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: log
+          path: |
+            mkcfg_android.log
+            make_android.log
+
+  # job: compile_androidconfig_414
+  compile_androidconfig_414:
+    needs: prechk
+    if: needs.prechk.outputs.re_v414_andr != ''
+    # The type of runner that the job will run on
+    runs-on: [lts]
+    container:
+      image: otcpkt.bj.intel.com/github-ci/ci.bj:0.3
+      volumes:
+        - /home/jenkins:/home/jenkins
+      options: -w /ci/jobs -u jenkins
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Fetch the latest kernel-config
+        shell: bash
+        run: |
+          cd /ci/kernel-config
+          git fetch --all && git checkout 4.14/config
+          cp bxt/android/x86_64_defconfig $GITHUB_WORKSPACE/android_defconfig
+          echo "Android config ready"
+
+      - name: Main
+        shell: bash
+        run: |
+          make mrproper
+          ./scripts/kconfig/merge_config.sh android_defconfig | tee mkcfg_android.log
+          make -j 16 2>&1 | tee make_android.log
+
+      - name: Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: log
+          path: |
+            mkcfg_android.log
+            make_android.log
+
+  # job: clang_compile_allyesconfig
+  clang_compile_allyesconfig:
+    needs: prechk
+    if: needs.prechk.outputs.re_v4v5_andr != ''
+    # The type of runner that the job will run on
+    runs-on: [lts]
+    container:
+      image: otcpkt.bj.intel.com/github-ci/ci-andr.bj:0.3
+      volumes:
+        - /home/jenkins:/home/jenkins
+      options: -w /ci/jobs -u jenkins
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Main
+        shell: bash
+        run: |
+          clang --version
+          export PATH=$PATH:$(find /usr/lib -type d -name "llvm-1*")/bin
+          make mrproper
+          make ARCH=x86_64 CC=clang HOSTCC=clang allyesconfig 2>&1 | tee clang_mkcfg.log
+          make ARCH=x86_64 CC=clang HOSTCC=clang -j 16 2>&1 | tee clang_make.log
+          echo $?
+
+      - name: Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: log
+          path: |
+            clang_mkcfg.log
+            clang_make.log
+
+
+  # job: clang_compile_allmodconfig
+  clang_compile_allmodconfig:
+    needs: prechk
+    if: needs.prechk.outputs.re_v4v5_andr != ''
+    # The type of runner that the job will run on
+    runs-on: [lts]
+    container:
+      image: otcpkt.bj.intel.com/github-ci/ci-andr.bj:0.3
+      volumes:
+        - /home/jenkins:/home/jenkins
+      options: -w /ci/jobs -u jenkins
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Main
+        shell: bash
+        run: |
+          clang --version
+          export PATH=$PATH:$(find /usr/lib -type d -name "llvm-1*")/bin
+          make mrproper
+          make ARCH=x86_64 CC=clang HOSTCC=clang allmodconfig 2>&1 | tee clang_mkcfg_allmod.log
+          make ARCH=x86_64 CC=clang HOSTCC=clang -j 16 2>&1 | tee clang_make_allmod.log
+          echo $?
+
+      - name: Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: log
+          path: |
+            clang_mkcfg_allmod.log
+            clang_make_allmod.log
+
+
+  # job: clang_compile_allnoconfig
+  clang_compile_allnoconfig:
+    needs: prechk
+    if: needs.prechk.outputs.re_v4v5_andr != ''
+    # The type of runner that the job will run on
+    runs-on: [lts]
+    container:
+      image: otcpkt.bj.intel.com/github-ci/ci-andr.bj:0.3
+      volumes:
+        - /home/jenkins:/home/jenkins
+      options: -w /ci/jobs -u jenkins
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Main
+        shell: bash
+        run: |
+          clang --version
+          export PATH=$PATH:$(find /usr/lib -type d -name "llvm-1*")/bin
+          make mrproper
+          make ARCH=x86_64 CC=clang HOSTCC=clang allnoconfig 2>&1 | tee clang_mkcfg_allno.log
+          make ARCH=x86_64 CC=clang HOSTCC=clang -j 16 2>&1 | tee clang_make_allno.log
+          echo $?
+
+      - name: Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: log
+          path: |
+            clang_mkcfg_allno.log
+            clang_make_allno.log
+
+
+  # job: scan2quilt
+  scan2quilt:
+    needs: prechk
+    if: |
+      needs.prechk.outputs.re_head_ref_stable == '' &&
+      github.base_ref == '5.10/yocto'
+    # The type of runner that the job will run on
+    runs-on: [lts]
+    container:
+      image: otcpkt.bj.intel.com/github-ci/ci-devops.bj:0.3
+      volumes:
+        - /home/jenkins:/home/jenkins
+      options: -w /ci/jobs -u jenkins
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Main
+        shell: bash
+        run: |
+          git fetch --all
+          python3 --version
+          cd /ci/devops
+          git fetch && git checkout origin/sandbox/yifan/quilt1210
+          source envs_for_testing.sh
+          python3 testAndUpdateQuilt.py
+          touch generate.log
+
+      - name: Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: log
+          path: generate.log
+
+
+  # job: post_merge_quilt_deploy
+  post_merge_quilt_deploy:
+    if: github.ref == '5.10/yocto'
+    # The type of runner that the job will run on
+    runs-on: [lts]
+    container:
+      image: otcpkt.bj.intel.com/github-ci/ci-devops.bj:0.3
+      volumes:
+        - /home/jenkins:/home/jenkins
+      options: -w /ci/jobs -u jenkins
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Main
+        shell: bash
+        run: |
+          git fetch --all
+          python3 --version
+          cd /ci/devops
+          git fetch && git checkout origin/sandbox/yifan/quilt1210
+          source envs_for_testing_mr.sh
+          python3 testAndUpdateQuilt-post-MR.py
+          touch generate.log
+
+      - name: Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: log
+          path: generate.log
+
+
+  # job: compile_allmodconfig_arm64
+  compile_allmodconfig_arm64:
+    needs: prechk
+    if: |
+      needs.prechk.outputs.re_head_ref_stable == '' &&
+      ( needs.prechk.outputs.re_v5p != '' || needs.prechk.outputs.re_ikt_v510 != '' )
+    # The type of runner that the job will run on
+    runs-on: [lts]
+    container:
+      image: otcpkt.bj.intel.com/github-ci/ci.bj:0.3
+      volumes:
+        - /home/jenkins:/home/jenkins
+      options: -w /ci/jobs -u jenkins
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Main
+        shell: bash
+        run: |
+          make distclean
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- allmodconfig 2>&1 | tee mkcfg_allmod_arm64.log
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j 16 2>&1 | tee make_allmod_arm64.log
+          echo $?
+
+      - name: Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: log
+          path: |
+            mkcfg_allmod_arm64.log
+            make_allmod_arm64.log
+
+
+  # job: compile_allyesconfig_arm64
+  compile_allyesconfig_arm64:
+    needs: prechk
+    if: |
+      needs.prechk.outputs.re_head_ref_stable == '' &&
+      ( needs.prechk.outputs.re_v5p != '' || needs.prechk.outputs.re_ikt_v510 != '' )
+    # The type of runner that the job will run on
+    runs-on: [lts]
+    container:
+      image: otcpkt.bj.intel.com/github-ci/ci.bj:0.3
+      volumes:
+        - /home/jenkins:/home/jenkins
+      options: -w /ci/jobs -u jenkins
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Main
+        shell: bash
+        run: |
+          make distclean
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- allyesconfig 2>&1 | tee mkcfg_allyes_arm64.log
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j 16 2>&1 | tee make_allyes_arm64.log
+          echo $?
+
+      - name: Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: log
+          path: |
+            mkcfg_allyes_arm64.log
+            make_allyes_arm64.log
+
+
+  # job: compile_allnoconfig_arm64
+  compile_allnoconfig_arm64:
+    needs: prechk
+    if: |
+      needs.prechk.outputs.re_head_ref_stable == '' &&
+      ( needs.prechk.outputs.re_v5p != '' || needs.prechk.outputs.re_ikt_v510 != '' )
+    # The type of runner that the job will run on
+    runs-on: [lts]
+    container:
+      image: otcpkt.bj.intel.com/github-ci/ci.bj:0.3
+      volumes:
+        - /home/jenkins:/home/jenkins
+      options: -w /ci/jobs -u jenkins
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Main
+        shell: bash
+        run: |
+          make distclean
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- allnoconfig 2>&1 | tee mkcfg_allno_arm64.log
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j 16 2>&1 | tee make_allno_arm64.log
+          echo $?
+
+      - name: Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: log
+          path: |
+            mkcfg_allno_arm64.log
+            make_allno_arm64.log

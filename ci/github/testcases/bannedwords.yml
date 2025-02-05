@@ -1,0 +1,41 @@
+# Define banned words for bannedwordsscan test case
+# Rules:
+#   1. letter case is ignored 
+#   2. in alphabetical order
+bannedword:
+    base:
+        - http.*\.intel.com
+        - kojiclear
+        - (?:\d{1,3}\.){3}\d{1,3}
+        - not[\s_-]*(?:for[\s_-]*)?upstream
+    cmb:
+        - CMB
+        - Carmel.?Beach
+    dmr:
+        - DMR(?:-D|-AP|-SP|)
+        - Diamond.?Rapids(?:-D|-AP|-SP|)
+    nvl:
+        - NVL
+        - Nova.?Lake
+    pmr:
+        - PMR
+        - Palm.?Ridge
+    pvl:
+        - PVL
+        - Palmerville
+    svl:
+        - SVL
+        - Summitville
+    wcl:
+        - WCL
+        - Wildcat.?Lake
+    RZL:
+        - RZL
+        - Razor.?Lake
+whitelist:
+    - linux.intel.com
+    - www.intel.com
+    - https:\/\/lore.kernel.org
+    - 127\.\d+\.\d+\.\d+
+    - 169\.254\.\d+\.\d+
+    - 192\.168\.\d+\.\d+

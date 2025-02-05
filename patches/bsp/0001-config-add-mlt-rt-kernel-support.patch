@@ -1,0 +1,51 @@
+From 5c49797f564d42d1af40e091608fb23743ba664e Mon Sep 17 00:00:00 2001
+From: sys_oak <sys_oak@intel.com>
+Date: Sun, 25 Aug 2024 23:59:46 -0700
+Subject: [PATCH] config: add mlt-rt kernel support
+
+Signed-off-by: sys_oak <sys_oak@intel.com>
+---
+ conf/include/ese-x86-all.inc                       | 2 +-
+ conf/include/kernels/x86-mlt-rt-kernel-default.inc | 2 ++
+ conf/multiconfig/x86-mlt-rt.conf                   | 7 +++++++
+ 3 files changed, 10 insertions(+), 1 deletion(-)
+ create mode 100644 conf/include/kernels/x86-mlt-rt-kernel-default.inc
+ create mode 100644 conf/multiconfig/x86-mlt-rt.conf
+
+diff --git a/conf/include/ese-x86-all.inc b/conf/include/ese-x86-all.inc
+index 8613efd..6b711ac 100644
+--- a/conf/include/ese-x86-all.inc
++++ b/conf/include/ese-x86-all.inc
+@@ -9,7 +9,7 @@ DISTRO_FEATURES:append = " virtualization"
+ 
+ # available multiconfigs
+ # users may mask uneeded ones to speed up bitbake
+-BBMULTICONFIG ??= "x86-ese-installer x86-mlt x86-musl x86-minimal x86-minimal-netboot x86-minimal-provisioning \
++BBMULTICONFIG ??= "x86-ese-installer x86-mlt x86-mlt-rt x86-musl x86-minimal x86-minimal-netboot x86-minimal-provisioning \
+   x86-2021 x86-2021-minimal x86-2021-minimal-netboot x86-rt-2021 x86-2021-qemu_host \
+   x86-2023 x86-rt-2023 x86-2023-minimal x86-2023-minimal-netboot"
+ 
+diff --git a/conf/include/kernels/x86-mlt-rt-kernel-default.inc b/conf/include/kernels/x86-mlt-rt-kernel-default.inc
+new file mode 100644
+index 0000000..3f2c212
+--- /dev/null
++++ b/conf/include/kernels/x86-mlt-rt-kernel-default.inc
+@@ -0,0 +1,2 @@
++# this file makes the MLT kernel the default boot option
++require conf/kernels/presets/mlt-rt.conf
+diff --git a/conf/multiconfig/x86-mlt-rt.conf b/conf/multiconfig/x86-mlt-rt.conf
+new file mode 100644
+index 0000000..a51a89f
+--- /dev/null
++++ b/conf/multiconfig/x86-mlt-rt.conf
+@@ -0,0 +1,7 @@
++# this is the standard full sized image with LTS kernel as the default boot option
++SELECTABLE_KERNEL_DEFAULT = "x86-mlt-rt-kernel-default.inc"
++
++# common contents and settings
++require conf/include/ese-x86-image.inc
++
++IMAGE_INSTALL:remove = "iotg-tsn-ref-sw open62541-iotg"
+-- 
+2.25.1
+

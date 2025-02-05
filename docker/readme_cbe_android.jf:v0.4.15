@@ -1,0 +1,28 @@
+name : otcpkt.bj.intel.com/cbe/android.jf:v0.4.15
+base : otcpkt.bj.intel.com/jiahua/android.jf:v0.4.12
+summary : install 3 tools (sshfs postgresql iproute2) ; copy local /opt/poky/242.tar.gz to docker image and unzip ; uninstall ant-optional ; install postgres-client ; 
+
+
+1)install sshfs
+step : apt install sshfs
+
+2)install iproute2
+step ： apt install iproute2
+
+3)install postgresql
+step : 
+    1. sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+        wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+    2. sudo apt-get update
+    3. sudo apt-get -y install postgresql
+    4. cd /etc/postgresql/14/main 
+    5. modify postgresql.conf listen_addresses = 'localhost' to listen_addresses = '*'
+
+4)copy poky/2.4.2
+step : docker cp /opt/poky/242.tar.gz 9f3d92992d9147960b331f3bf6214b6cdf6ea8a0a30aa006e3a64138cd6c217a:/opt
+
+5)uninstall ant-optional
+step : apt-get remove ant-optional -y
+
+6)install postgres-client
+step : apt install postgres-client

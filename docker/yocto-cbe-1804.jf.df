@@ -1,0 +1,96 @@
+FROM ubuntu:18.04
+
+ENV DEFAULT_USER=jenkins \
+    TZ=America/Los_Angeles \
+    LANG=en_US.utf8 \
+    HTTP_PROXY=http://proxy.jf.intel.com:911 \
+    HTTPS_PROXY=http://proxy.jf.intel.com:912 \
+    SOCKS_PROXY=http://proxy.jf.intel.com:911 \
+    FTP_PROXY=http://proxy.jf.intel.com:911 \
+    ALL_PROXY=http://proxy.jf.intel.com:911 \
+    NO_PROXY="intel.com, .intel.com, 10.0.0.0/8, 192.168.0.0/16, localhost, 127.0.0.0/8, 134.134.0.0/16" \
+    http_proxy=http://proxy.jf.intel.com:911 \
+    https_proxy=http://proxy.jf.intel.com:912 \
+    all_proxy=http://proxy.jf.intel.com:911 \
+    npm_config_https_proxy=http://proxy.jf.intel.com:911 \
+    npm_config_proxy=http://proxy.jf.intel.com:911 \
+    socks_proxy=http://proxy.jf.intel.com:911 \
+    ftp_proxy=http://proxy.jf.intel.com:911 \
+    no_proxy="intel.com, .intel.com, 10.0.0.0/8, 192.168.0.0/16, localhost, 127.0.0.0/8, 134.134.0.0/16" \
+    PATH=/home/jenkins/bin:/home/jenkins/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+RUN apt-get update && \
+    env DEBIAN_FRONTEND=noninteractive \
+      apt-get install -yq \
+        sudo build-essential git python python3 man bash diffstat gawk chrpath \
+        wget cpio texinfo lzop apt-utils bc screen libncurses5-dev locales \
+        libc6-dev-i386 patchutils ssh-client vim nano repo gawk wget git-core \
+        diffstat unzip texinfo socat libsdl1.2-dev xterm make xsltproc \
+        docbook-utils dblatex xmlto libglib2.0-dev xutils-dev m4 flex bison \
+        strace nfs-common libssl-dev libgmp-dev libmpfr-dev libmpc-dev \
+        pax-utils paxctl libiberty-dev binutils-dev openssl curl ocaml-nox \
+        elfutils libelf-dev zstd icecc openjdk-8-jre-headless \
+        openjdk-11-jdk-headless python-mako gettext liblz4-tool \
+        policycoreutils checkpolicy git-lfs kmod mtools squashfs-tools parted \
+        rpm2cpio cmake ninja-build gperf python3-ply python3-pip \
+        python3-setuptools python3-wheel xz-utils file gcc-multilib autoconf \
+        automake libtool gdb clang-8 llvm-8 ncurses-base ncurses-term \
+        libncurses-dev pv rpm ntp software-properties-common connect-proxy \
+        openssh-server rsync python3-sh python3-pexpect python3-django python-gi-dev \
+        uuid-dev fastboot u-boot-tools device-tree-compiler python-pycryptodome \
+        python3-pyelftools python3-pycryptodome && \
+    pip3 install pytz && \
+    add-apt-repository ppa:ubuntu-toolchain-r/test && \
+    apt-get update && \
+    env DEBIAN_FRONTEND=noninteractive \
+      apt-get install -yq gcc-9 g++-9 && \
+    echo "\
+Acquire::http::proxy \"${HTTP_PROXY}/\";\n\
+Acquire::https::proxy \"${HTTPS_PROXY}/\";\n\
+Acquire::ftp::proxy \"${FTP_PROXY}/\";\n\
+Acquire::socks::proxy \"${SOCKS_PROXY}/\";" | tee /etc/apt/apt.conf && \
+    useradd -ms /bin/bash -u 1027 -p '$1$cnGKG4s9$UUD1b5cHVG5vUu8FLKwqn0' $DEFAULT_USER && \
+    usermod -aG sudo $DEFAULT_USER && \
+    dpkg-reconfigure locales && \
+    echo "en_US.UTF-8 UTF-8" | tee -a /etc/locale.gen && \
+    locale-gen && \
+    ln -sf /usr/share/zoneinfo/$TZ /etc/localtime && \
+    echo "server corp.intel.com maxpoll 12" | tee -a /etc/ntp.conf && \
+    mkdir /var/run/sshd && \
+    update-alternatives \
+      --install /usr/bin/clang clang /usr/bin/clang-8 800 \
+      --slave   /usr/bin/clang++ clang++ /usr/bin/clang++-8 \
+      --slave   /usr/bin/clang-check clang-check /usr/bin/clang-check-8 \
+      --slave   /usr/bin/clang-query clang-query /usr/bin/clang-query-8 \
+      --slave   /usr/bin/clang-rename clang-rename /usr/bin/clang-rename-8 \
+      --slave   /usr/bin/clang-cpp clang-cpp /usr/bin/clang-cpp-8 && \
+    update-alternatives \
+      --install /usr/bin/llvm-config   llvm-config /usr/bin/llvm-config-8  800 \
+      --slave /usr/bin/llvm-ar         llvm-ar         /usr/bin/llvm-ar-8 \
+      --slave /usr/bin/llvm-as         llvm-as         /usr/bin/llvm-as-8 \
+      --slave /usr/bin/llvm-bcanalyzer llvm-bcanalyzer /usr/bin/llvm-bcanalyzer-8 \
+      --slave /usr/bin/llvm-cov        llvm-cov        /usr/bin/llvm-cov-8 \
+      --slave /usr/bin/llvm-diff       llvm-diff       /usr/bin/llvm-diff-8 \
+      --slave /usr/bin/llvm-dis        llvm-dis        /usr/bin/llvm-dis-8 \
+      --slave /usr/bin/llvm-dwarfdump  llvm-dwarfdump  /usr/bin/llvm-dwarfdump-8 \
+      --slave /usr/bin/llvm-extract    llvm-extract    /usr/bin/llvm-extract-8 \
+      --slave /usr/bin/llvm-link       llvm-link       /usr/bin/llvm-link-8 \
+      --slave /usr/bin/llvm-mc         llvm-mc         /usr/bin/llvm-mc-8 \
+      --slave /usr/bin/llvm-mcmarkup   llvm-mcmarkup   /usr/bin/llvm-mcmarkup-8 \
+      --slave /usr/bin/llvm-nm         llvm-nm         /usr/bin/llvm-nm-8 \
+      --slave /usr/bin/llvm-objdump    llvm-objdump    /usr/bin/llvm-objdump-8 \
+      --slave /usr/bin/llvm-ranlib     llvm-ranlib     /usr/bin/llvm-ranlib-8 \
+      --slave /usr/bin/llvm-readobj    llvm-readobj    /usr/bin/llvm-readobj-8 \
+      --slave /usr/bin/llvm-rtdyld     llvm-rtdyld     /usr/bin/llvm-rtdyld-8 \
+      --slave /usr/bin/llvm-size       llvm-size       /usr/bin/llvm-size-8 \
+      --slave /usr/bin/llvm-stress     llvm-stress     /usr/bin/llvm-stress-8 \
+      --slave /usr/bin/llvm-symbolizer llvm-symbolizer /usr/bin/llvm-symbolizer-8 \
+      --slave /usr/bin/llvm-tblgen     llvm-tblgen     /usr/bin/llvm-tblgen-8 && \
+    update-alternatives \
+      --install /usr/bin/gcc gcc /usr/bin/gcc-9 800 \
+      --slave   /usr/bin/g++ g++ /usr/bin/g++-9 && \
+    update-alternatives \
+      --install /usr/bin/cpp cpp /usr/bin/cpp-9 800
+
+CMD ["/usr/sbin/service", "ssh", "start"]
+CMD ["/usr/sbin/sshd", "-D"]

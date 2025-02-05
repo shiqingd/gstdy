@@ -1,0 +1,68 @@
+#FROM amr-cache-registry.caas.intel.com/cache/library/ubuntu:20.04
+FROM ubuntu:22.04
+
+ENV DEFAULT_USER=jenkins \
+    TZ=Asia/Shanghai \
+    LC_ALL=C \
+    SHELL=/bin/bash \
+    HTTP_PROXY=http://child-prc.intel.com:913 \
+    HTTPS_PROXY=http://child-prc.intel.com:912 \
+    SOCKS_PROXY=http://child-prc.intel.com:1080 \
+    FTP_PROXY=http://child-prc.intel.com:913 \
+    ALL_PROXY=http://child-prc.intel.com:913 \
+    NO_PROXY="intel.com,.intel.com,10.0.0.0/8,192.168.0.0/16,localhost,127.0.0.0/8,134.134.0.0/16" \
+    http_proxy=http://child-prc.intel.com:913 \
+    https_proxy=http://child-prc.intel.com:912 \
+    all_proxy=http://child-prc.intel.com:913 \
+    npm_config_https_proxy=http://child-prc.intel.com:913 \
+    npm_config_proxy=http://child-prc.intel.com:913 \
+    socks_proxy=http://child-prc.intel.com:1080 \
+    ftp_proxy=http://child-prc.intel.com:913 \
+    no_proxy="intel.com,.intel.com,10.0.0.0/8,192.168.0.0/16,localhost,127.0.0.0/8,134.134.0.0/16" \
+    PATH=/home/jenkins/bin:/home/jenkins/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+COPY ./ci.tgz /tmp/ci.tgz
+
+RUN apt-get update && \
+    env DEBIAN_FRONTEND=noninteractive \
+      apt-get install -yq \
+        bash python3 python3-dev openssh-server sudo vim ca-certificates \
+        wget python3-pip busybox lsb-release software-properties-common \
+        apt-transport-https build-essential ccache git wget libncurses-dev \
+        openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev libiberty-dev \
+        autoconf pkg-config cpio libyaml-dev gcc gcc-aarch64-linux-gnu g++
+
+RUN apt-get update && \
+    env DEBIAN_FRONTEND=noninteractive \
+      apt-get install -yq --no-install-recommends \
+        bc bison cmake curl flex file make ninja-build texinfo xz-utils \
+        zlib1g-dev tzdata ntp quilt rsync python3-pexpect codespell cppcheck \
+        sparse yamllint python3-filelock python3-suds swig postgresql-client \
+        sshfs iproute2 gawk
+
+
+RUN pip3 install ply GitPython PyGithub sh kconfiglib \
+                 git+https://github.com/devicetree-org/dt-schema.git@master \
+                 docutils Sphinx==2.4.4 sphinx_rtd_theme
+
+RUN echo "\
+Acquire::http::proxy \"${HTTP_PROXY}/\";\n\
+Acquire::https::proxy \"${HTTPS_PROXY}/\";\n\
+Acquire::ftp::proxy \"${FTP_PROXY}/\";\n\
+Acquire::socks::proxy \"${SOCKS_PROXY}/\";" | tee /etc/apt/apt.conf && \
+    sed -ri  '/^%sudo/s/ALL$/NOPASSWD:ALL/' /etc/sudoers && \
+    groupadd -g 1027 $DEFAULT_USER && \
+    useradd -ms /bin/bash -u 1027 -g 1027 -p '$1$cnGKG4s9$UUD1b5cHVG5vUu8FLKwqn0' $DEFAULT_USER && \
+    usermod -aG sudo $DEFAULT_USER && \
+    ln -sf /usr/share/zoneinfo/$TZ /etc/localtime && \
+    ln -sf $(dpkg -L codespell | sed -rn '/\/dictionary.txt$/s/\/dictionary.txt//p') /usr/share/codespell && \
+    echo "server corp.intel.com" | tee -a /etc/ntp.conf && \
+    tar -C / -zxf /tmp/ci.tgz && \
+    rm /tmp/ci.tgz && \
+    mkdir /ci/jobs && \
+    chown -R $DEFAULT_USER:$DEFAULT_USER /ci
+
+USER $DEFAULT_USER
+WORKDIR /home/$DEFAULT_USER
+
+CMD ["bash"]

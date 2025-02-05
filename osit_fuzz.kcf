@@ -1,0 +1,23 @@
+# To enable coverage collection, which is
+# extremely important for effective fuzzing
+CONFIG_KCOV=y
+CONFIG_KCOV_INSTRUMENT_ALL=y
+CONFIG_KCOV_ENABLE_COMPARISONS=y
+CONFIG_DEBUG_FS=y
+
+# To show code coverage in web interface
+CONFIG_DEBUG_INFO=y
+
+# For detection of enabled syscalls and kernel bitness
+CONFIG_KALLSYMS=y
+CONFIG_KALLSYMS_ALL=y
+CONFIG_KASAN=y
+CONFIG_KASAN_INLINE=y
+
+# For testing with fault injection
+CONFIG_FAULT_INJECTION=y
+CONFIG_FAULT_INJECTION_DEBUG_FS=y
+CONFIG_FAILSLAB=y CONFIG_FAIL_PAGE_ALLOC=y
+CONFIG_FAIL_MAKE_REQUEST=y
+CONFIG_FAIL_IO_TIMEOUT=y
+CONFIG_FAIL_FUTEX=y

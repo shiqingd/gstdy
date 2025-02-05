@@ -1,0 +1,56 @@
+FROM amr-cache-registry.caas.intel.com/cache/library/centos:8
+
+RUN sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-Linux-* &&\
+    sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-Linux-*
+
+#docker
+RUN yum upgrade -y
+
+LABEL org.label-schema.schema-version=1.0 org.label-schema.name="CentOS Base Image" org.label-schema.vendor=CentOS org.label-schema.license=GPLv2 org.label-schema.build-date=20210516
+LABEL maintainer="Dave Lin <dave.lin@intel.com>"
+
+ENV DEFAULT_USER=jenkins \
+    TZ=America/Los_Angeles \
+    LANG=C.UTF-8 \
+    LC_ALL=C \
+    HTTP_PROXY=http://proxy.jf.intel.com:911 \
+    HTTPS_PROXY=http://proxy.jf.intel.com:912 \
+    SOCKS_PROXY=http://proxy.jf.intel.com:911 \
+    FTP_PROXY=http://proxy.jf.intel.com:911 \
+    ALL_PROXY=http://proxy.jf.intel.com:911 \
+    NO_PROXY="intel.com, .intel.com, 10.0.0.0/8, 192.168.0.0/16, localhost, 127.0.0.0/8, 134.134.0.0/16" \
+    http_proxy=http://proxy.jf.intel.com:911 \
+    https_proxy=http://proxy.jf.intel.com:912 \
+    all_proxy=http://proxy.jf.intel.com:911 \
+    npm_config_https_proxy=http://proxy.jf.intel.com:911 \
+    npm_config_proxy=http://proxy.jf.intel.com:911 \
+    socks_proxy=http://proxy.jf.intel.com:911 \
+    ftp_proxy=http://proxy.jf.intel.com:911 \
+    no_proxy="intel.com, .intel.com, 10.0.0.0/8, 192.168.0.0/16, localhost, 127.0.0.0/8, 134.134.0.0/16" \
+    PATH=/home/jenkins/bin:/home/jenkins/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+RUN yum -y install epel-release drpm dnf-plugins-core  && \
+    dnf config-manager --set-enabled powertools  && \
+    yum -y update  && \
+    yum -y install scl-utils scl-utils-build which mock git wget curl kernel-devel rpmdevtools rpmlint rpm-build \
+                   sudo gcc-c++ make automake autoconf yum-utils scl-utils scl-utils-build cmake libtool expect  && \
+    yum -y install aspell-devel bzip2-devel chrpath cyrus-sasl-devel enchant-devel fastlz-devel \
+                   fontconfig-devel freetype-devel gettext-devel gmp-devel  httpd-devel krb5-devel \
+                   libacl-devel libcurl-devel libdb-devel libedit-devel liberation-sans-fonts \
+                   libevent-devel libgit2 libicu-devel libjpeg-turbo-devel libuuid-devel libmcrypt-devel \
+                   libmemcached-devel libpng-devel libtiff-devel libtool-ltdl-devel libwebp-devel libX11-devel \
+                   libXpm-devel libxml2-devel libxslt-devel memcached net-snmp-devel openldap-devel openssl-devel \
+                   pam-devel pcre-devel perl-generators postgresql-devel recode-devel sqlite-devel systemd-devel \
+                   systemtap-sdt-devel tokyocabinet-devel unixODBC-devel zlib-devel flex bison bc quilt rsync \
+		   pciutils-devel libcap-devel asciidoc python3 chrony && \
+    yum clean all  && rm -rf /var/cache/yum && \
+    sed -ri  '/^%wheel/s/ALL$/NOPASSWD:ALL/' /etc/sudoers && \
+    useradd -ms /bin/bash -u 1027 -p '$1$cnGKG4s9$UUD1b5cHVG5vUu8FLKwqn0' $DEFAULT_USER && \
+    usermod -aG wheel $DEFAULT_USER && \
+    sed -i \
+        -e '/Defaults.*XAUTHORITY"/a Defaults    env_keep += "HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy"' \
+        -e '/Defaults    requiretty/c\#Defaults    requiretty' /etc/sudoers && \
+    ln -sf /usr/share/zoneinfo/$TZ /etc/localtime && \
+    echo "server corp.intel.com" | tee -a /etc/chrony.conf
+
+CMD ["/bin/bash"]

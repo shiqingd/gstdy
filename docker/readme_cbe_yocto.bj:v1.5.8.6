@@ -1,0 +1,31 @@
+name : otcpkt.bj.intel.com/cbe/yocto.bj:v1.5.8.6
+base : otcpkt.bj.intel.com/jiahua/yocto.jf:v1.5.8.1
+summary : install 3 tools (sshfs postgresql iproute2) ; install python module jenkinsapi ; install postgres-client ; install aria2 tool ; install python module sqlalchemy ;
+
+
+1)install sshfs
+step : apt install sshfs
+
+2)install iproute2
+step ： apt install iproute2
+
+3)install postgresql
+step : 
+    1. sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+        wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+    2. sudo apt-get update
+    3. sudo apt-get -y install postgresql
+    4. cd /etc/postgresql/14/main 
+    5. modify postgresql.conf listen_addresses = 'localhost' to listen_addresses = '*'
+
+4)install python module jenkinsapi
+step : pip3 install jenkinsapi
+
+5)install postgres-client
+step : apt install postgres-client
+
+6)install aria2 tool
+step : apt install aria2
+
+7)install python module sqlalchemy
+step : pip3 install sqlalchemy

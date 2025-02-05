@@ -1,0 +1,24 @@
+From 36713c70dbd25465a1fdd0e38685c5f553f042af Mon Sep 17 00:00:00 2001
+From: sys_oak <sys_oak@intel.com>
+Date: Tue, 11 Jan 2022 02:40:24 -0800
+Subject: [PATCH] for MLT remove append from LINUX_VERSION_EXTENSION
+
+---
+ recipes-kernel/linux/linux-intel-ese-mlt_git.bb | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/recipes-kernel/linux/linux-intel-ese-mlt_git.bb b/recipes-kernel/linux/linux-intel-ese-mlt_git.bb
+index 9b6bf6c..a3d23eb 100644
+--- a/recipes-kernel/linux/linux-intel-ese-mlt_git.bb
++++ b/recipes-kernel/linux/linux-intel-ese-mlt_git.bb
+@@ -2,7 +2,6 @@ require ./linux-intel-ese-mlt.inc
+ require ./yocto-kernel-cache.inc
+ require ./linux-intel-ese.inc
+ 
+-LINUX_VERSION_EXTENSION:append = "-mainline-tracking"
+ KERNEL_PACKAGE_NAME = "${PN}-kernel"
+ 
+ # Optional kernel security harderning that may interfere with debugging
+-- 
+2.17.1
+

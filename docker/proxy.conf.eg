@@ -1,0 +1,2 @@
+[Service]
+Environment="HTTP_PROXY=http://proxy-prc.intel.com:911/" "HTTPS_PROXY=http://child-prc.intel.com:913/" "NO_PROXY=127.0.0.1,127.0.1.1,10.0.0.0/8,localhost,.intel.com"

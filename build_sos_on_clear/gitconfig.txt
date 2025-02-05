@@ -1,0 +1,59 @@
+[user]
+	name = sys_oak
+	email = sys_oak@intel.com
+
+[color]
+	ui = auto
+
+[http]
+	proxy = http://proxy-chain.intel.com:911/
+
+[https]
+	proxy = https://proxy-chain.intel.com:912/
+
+[socks]
+	proxy = localhost:1080
+
+[review "https://android.intel.com"]
+        username = sys_oak
+
+[core]
+        gitproxy = /root/bin/gitproxy.sh
+
+
+[url "ssh://sys_oak@android.intel.com:29418/"]
+  insteadOf=git://android.intel.com/
+  insteadOf=ssh://android.intel.com/
+  insteadOf=ssh://android.intel.com:29418/
+  insteadOf=git://android-mirror-or.devtools.intel.com/
+  insteadOf=ssh://android-mirror-or.devtools.intel.com/
+  insteadOf=ssh://android-mirror-or.devtools.intel.com:29418/
+  insteadOf=git://android-mirror.devtools.intel.com/
+  insteadOf=ssh://android-mirror.devtools.intel.com/
+  insteadOf=ssh://android-mirror.devtools.intel.com:29418/
+ 
+[url "ssh://sys_oak@android.intel.com:29418/"]
+  pushInsteadOf=ssh://android.intel.com/
+  pushInsteadOf=ssh://android.intel.com:29418/
+  pushInsteadOf=ssh://android-mirror.devtools.intel.com/
+  pushInsteadOf=ssh://android-mirror.devtools.intel.com:29418/
+  pushInsteadOf=ssh://android-mirror-or.devtools.intel.com/
+  pushInsteadOf=ssh://android-mirror-or.devtools.intel.com:29418/
+
+[push]
+	default = matching
+
+[url "https://github.com/"]
+        insteadOf = git://github.com/
+
+[url "https://git.yoctoproject.org/git/"]
+        insteadOf = git://git.yoctoproject.org/
+
+[filter "lfs"]
+	required = true
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+[credential]
+        helper = store
+                       

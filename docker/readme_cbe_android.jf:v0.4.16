@@ -1,0 +1,15 @@
+name : readme_cbe_android.jf:v0.4.16 
+base : readme_cbe_android.jf:v0.4.15
+summary : install python 2 modules (jinja2,pyshell), pip3 update
+
+1)install python module jinja2
+step : pip3 install jinja2
+
+2)install python module pyshell
+step : 
+	1.git clone https://github.com/knsathya/pyshell.git
+	2.cd pyshell
+	3.copy pyshell to usr/local/lib/python3.X/dist-packages/
+
+3)pip3 upgrade
+step : /usr/bin/python3.8 -m pip install --upgrade pip

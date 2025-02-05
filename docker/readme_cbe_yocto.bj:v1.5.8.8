@@ -1,0 +1,12 @@
+name : otcpkt.bj.intel.com/cbe/yocto.bj:v1.5.8.8
+base : otcpkt.bj.intel.com/cbe/yocto.bj:v1.5.8.7
+summary : The Python command points to Python3 (default python points to python2)
+
+0)use root user into docker image
+step : docker run -it -u root otcpkt.bj.intel.com/cbe/yocto.bj:v1.5.8.X bash
+
+1)remove python
+step : cd /usr/bin; rm python
+
+2)points to python3
+step : ln -s python3 python

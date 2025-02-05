@@ -1,0 +1,40 @@
+# NOTE: banned words can never contain vertical bar (|) or caret (^)
+# characters. All other printable ASCII characters are permitted in the word
+# list below.
+
+kojiclear
+.al.intel.com
+.an.intel.com
+.bj.intel.com
+.ch.intel.com
+.fi.intel.com
+.fm.intel.com
+.gv.intel.com
+.hf.intel.com
+.iam.intel.com
+.iind.intel.com
+.ikor.intel.com
+.jf.intel.com
+.ka.intel.com
+.ld.intel.com
+.lm.intel.com
+.nc.intel.com
+.or.intel.com
+.pdx.intel.com
+.png.intel.com
+.ra.intel.com
+.sc.intel.com
+.sh.intel.com
+.tm.intel.com
+.vc.intel.com
+.zpn.intel.com
+corp.intel.com
+github.intel.com
+eclists.intel.com
+devtools.intel.com
+ith.intel.com
+ostc.intel.com
+android.intel.com
+10.54.39.
+134.134.
+REVERTME

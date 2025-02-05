@@ -1,0 +1,24 @@
+From 1398e9c6256d1217ec05bd581ac74abba6ca6a35 Mon Sep 17 00:00:00 2001
+From: sys_oak <sys_oak@intel.com>
+Date: Tue, 10 Jan 2023 17:50:00 -0800
+Subject: [PATCH] set CONFIG_GPIO_SYSFS to be y
+
+---
+ recipes-kernel/linux/linux-config/bsp/x86/intel-dev.cfg | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/recipes-kernel/linux/linux-config/bsp/x86/intel-dev.cfg b/recipes-kernel/linux/linux-config/bsp/x86/intel-dev.cfg
+index 43f638c..2246f31 100644
+--- a/recipes-kernel/linux/linux-config/bsp/x86/intel-dev.cfg
++++ b/recipes-kernel/linux/linux-config/bsp/x86/intel-dev.cfg
+@@ -50,6 +50,7 @@ CONFIG_DEBUG_KMEMLEAK_EARLY_LOG_SIZE=4096
+ CONFIG_ARCH_WANT_OPTIONAL_GPIOLIB=y
+ CONFIG_DEBUG_GPIO=y
+ CONFIG_GPIO_ICH=y
++CONFIG_GPIO_SYSFS=y
+ CONFIG_PINCTRL_TIGERLAKE=y
+ CONFIG_PINCTRL_ELKHARTLAKE=y
+ CONFIG_PINCTRL_CANNONLAKE=y
+-- 
+2.25.1
+

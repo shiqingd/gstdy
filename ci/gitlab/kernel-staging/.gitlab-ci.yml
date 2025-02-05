@@ -1,0 +1,235 @@
+image: "otcpkt.bj.intel.com/gitlab-ci/static_test_staging:0.3"
+#this line is only for test
+stages:
+  - bannedwordsscan
+  - checkpatch
+  - compiletest_x86_64
+  - compiletest_arm64
+  - bullpen_merge_request
+
+bannedwords_scan:
+  stage: bannedwordsscan
+  before_script:
+    - ls -la /build/tools/kernel-staging/
+    - ls -la /build/tools/kernel-staging/scripts/
+    - cp /build/tools/kernel-staging/scripts/* .
+  script:
+    - python3 banned_word_scan.py
+  artifacts:
+    paths:
+      - commit.log
+    when: always
+  tags:
+    - code-check
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^(mainline-tracking|lts2020)\//'
+      when: always
+
+checkpatch_scan:
+  stage: checkpatch
+  before_script:
+    - ls -la /build/tools/kernel-staging/
+    - ls -la /build/tools/kernel-staging/scripts/
+    - cp /build/tools/kernel-staging/scripts/* .
+  script:
+    - python3 checkpatch.py
+  artifacts:
+    paths:
+      - checkpatch.log
+    when: always
+  tags:
+    - code-check 
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^(mainline-tracking|lts2020|for-review)\//'
+      when: always
+
+compile_allmodconfig_x86:
+  stage: compiletest_x86_64
+  before_script:
+    - apt-get update && apt-get -y -q upgrade
+    - apt-get -y -q install bc build-essential ccache gcc git wget xz-utils libncurses-dev flex
+    - apt-get -y -q install bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev
+    - apt-get -y -q install libiberty-dev autoconf cpio
+    - apt-get clean
+    - gcc -v
+    - which tee
+    - which cpio
+#install build tools for kernel in image
+  script:
+    - make distclean
+    - make ARCH=x86_64 allmodconfig 2>&1 | tee mkcfg_allmod.log
+    - make ARCH=x86_64 -j 16 2>&1 | tee make_allmod.log
+    - echo $?
+  artifacts:
+    paths:
+      - mkcfg_allmod.log
+      - make_allmod.log
+    when: always
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^(mainline-tracking|lts2020|for-review)\//'
+      when: always
+
+compile_allyesconfig_x86:
+  stage: compiletest_x86_64
+  before_script:
+    - apt-get update && apt-get -y -q upgrade
+    - apt-get -y -q install bc build-essential ccache gcc git wget xz-utils libncurses-dev flex
+    - apt-get -y -q install bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev
+    - apt-get -y -q install libiberty-dev autoconf cpio
+    - apt-get clean
+    - gcc -v
+    - which tee
+    - which cpio
+#install build tools for kernel in image
+  script:
+    - make distclean
+    - make ARCH=x86_64 allyesconfig 2>&1 | tee mkcfg_allyes.log
+    - make ARCH=x86_64 -j 16 2>&1 | tee make_allyes.log
+    - echo $?
+  artifacts:
+    paths:
+      - mkcfg_allyes.log
+      - make_allyes.log
+    when: always
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^(mainline-tracking|lts2020|for-review)\//'
+      when: always
+
+compile_allnoconfig_x86:
+  stage: compiletest_x86_64
+  before_script:
+    - apt-get update && apt-get -y -q upgrade
+    - apt-get -y -q install bc build-essential ccache gcc git wget xz-utils libncurses-dev flex
+    - apt-get -y -q install bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev
+    - apt-get -y -q install libiberty-dev autoconf cpio
+    - apt-get clean
+    - gcc -v
+    - which tee
+    - which cpio
+#install build tools for kernel in image
+  script:
+    - make distclean
+    - make ARCH=x86_64 allnoconfig 2>&1 | tee mkcfg_allno.log
+    - make ARCH=x86_64 -j 16 2>&1 | tee make_allno.log
+    - echo $?
+  artifacts:
+    paths:
+      - mkcfg_allno.log
+      - make_allno.log
+    when: always
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^(mainline-tracking|lts2020|for-review)\//'
+      when: always
+
+
+compile_allmodconfig_arm64:
+  stage: compiletest_arm64
+  before_script:
+    - apt-get update && apt-get -y -q upgrade
+    - apt-get -y -q install bc build-essential ccache gcc git wget xz-utils libncurses-dev flex
+    - apt-get -y -q install bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev
+    - apt-get -y -q install libiberty-dev autoconf cpio libyaml-dev gcc-aarch64-linux-gnu
+    - apt-get clean
+    - gcc -v
+    - which tee
+    - which cpio
+#install build tools for kernel in image
+  script:
+    - make distclean
+    - make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- allmodconfig 2>&1 | tee mkcfg_allmod_arm64.log
+    - make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j 16 2>&1 | tee make_allmod_arm64.log
+    - echo $?
+  artifacts:
+    paths:
+      - mkcfg_allmod_arm64.log
+      - make_allmod_arm64.log
+    when: always
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^(mainline-tracking|lts2020|for-review)\//'
+      when: always
+
+compile_allyesconfig_arm64:
+  stage: compiletest_arm64
+  before_script:
+    - apt-get update && apt-get -y -q upgrade
+    - apt-get -y -q install bc build-essential ccache gcc git wget xz-utils libncurses-dev flex
+    - apt-get -y -q install bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev
+    - apt-get -y -q install libiberty-dev autoconf cpio libyaml-dev gcc-aarch64-linux-gnu
+    - apt-get clean
+    - gcc -v
+    - which tee
+    - which cpio
+#install build tools for kernel in image
+  script:
+    - make distclean
+    - make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- allyesconfig 2>&1 | tee mkcfg_allyes_arm64.log
+    - make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu-  -j 16 2>&1 | tee make_allyes_arm64.log
+    - echo $?
+  artifacts:
+    paths:
+      - mkcfg_allyes_arm64.log
+      - make_allyes_arm64.log
+    when: always
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^(mainline-tracking|lts2020|for-review)\//'
+      when: always
+
+compile_allnoconfig_arm64:
+  stage: compiletest_arm64
+  before_script:
+    - apt-get update && apt-get -y -q upgrade
+    - apt-get -y -q install bc build-essential ccache gcc git wget xz-utils libncurses-dev flex
+    - apt-get -y -q install bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev
+    - apt-get -y -q install libiberty-dev autoconf cpio libyaml-dev gcc-aarch64-linux-gnu
+    - apt-get clean
+    - gcc -v
+    - which tee
+    - which cpio
+#install build tools for kernel in image
+  script:
+    - make distclean
+    - make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- allnoconfig 2>&1 | tee mkcfg_allno_arm64.log
+    - make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j 16 2>&1 | tee make_allno_arm64.log
+    - echo $?
+  artifacts:
+    paths:
+      - mkcfg_allno_arm64.log
+      - make_allno_arm64.log
+    when: always
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^(mainline-tracking|lts2020|for-review)\//'
+      when: always
+
+
+
+bullpen_patch_applyable:
+  stage: bullpen_merge_request
+  before_script:
+    - pwd
+    - rm -rf ../lkit-dev-ops
+    - git clone ssh://git@gitlab.devtools.intel.com:29418/linux-kernel-integration/lkit-dev-ops ../lkit-dev-ops
+  script:
+    - 'echo "Merge request source branch: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"'
+    - 'echo "Merge request target branch: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME"'
+    - 'echo "Merge request labels: $CI_MERGE_REQUEST_LABELS"'
+    - 'echo "Merge request project ID: $CI_MERGE_REQUEST_PROJECT_ID"'
+    - 'echo "Merge request ID: $CI_MERGE_REQUEST_IID"'
+    - git fetch --all
+    - python3 --version
+    - cd ../lkit-dev-ops
+    - git checkout origin/sandbox/yifan/PKT-4214
+    - source envs_for_bullpen.sh
+    - python3 bullpen_patch_apply.py
+    - touch generate.log
+    - rm -rf ../lkit-devops
+  artifacts:
+    paths:
+      - generate.log
+    when: always
+  rules:
+#need update
+    - if: '$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME !~ /stable_update/ && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "bullpen/v5.10"'
+      when: always
+  tags:
+    - oak-05-bullpen
+

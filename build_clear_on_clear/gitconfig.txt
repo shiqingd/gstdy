@@ -1,0 +1,116 @@
+[user]
+	name = sys_oak
+	email = sys_oak@intel.com
+
+[color]
+	ui = auto
+
+[http]
+	proxy = http://proxy-us.intel.com:911/
+	sslverify = false
+	sslCAinfo = /etc/ssl/certs/ca-certificates.crt
+
+[https]
+	proxy = https://proxy-us.intel.com:911/
+
+[core]
+	gitproxy = /home/jenkins/bin/gitproxy.sh
+
+[socks]
+	proxy = localhost:1080
+
+[review "https://android.intel.com"]
+        username = sys_oak
+
+[url "ssh://sys_oak@android-mirror-or.devtools.intel.com:29418/"]
+  insteadOf = git://android.intel.com/
+  insteadOf = ssh://android.intel.com/
+  insteadOf = ssh://android.intel.com:29418/
+  insteadOf = git://android-mirror-or.devtools.intel.com/
+  insteadOf = ssh://android-mirror-or.devtools.intel.com/
+  insteadOf = ssh://android-mirror-or.devtools.intel.com:29418/
+  insteadOf = git://android-mirror.devtools.intel.com/
+  insteadOf = ssh://android-mirror.devtools.intel.com/
+  insteadOf = ssh://android-mirror.devtools.intel.com:29418/
+ 
+[url "ssh://sys_oak@android.intel.com:29418/"]
+  pushInsteadOf = ssh://android.intel.com/
+  pushInsteadOf = ssh://android.intel.com:29418/
+  pushInsteadOf = ssh://android-mirror.devtools.intel.com/
+  pushInsteadOf = ssh://android-mirror.devtools.intel.com:29418/
+  pushInsteadOf = ssh://android-mirror-or.devtools.intel.com/
+  pushInsteadOf = ssh://android-mirror-or.devtools.intel.com:29418/
+
+[url "ssh://git@gitlab.devtools.intel.com:29418/"]
+  insteadOf=git://gitlab.devtools.intel.com/
+  insteadOf=ssh://gitlab.devtools.intel.com/
+  insteadOf=ssh://gitlab.devtools.intel.com:29418/
+  insteadOf=git://gitlab-mirror-pg.devtools.intel.com/
+  insteadOf=ssh://gitlab-mirror-pg.devtools.intel.com/
+  insteadOf=ssh://gitlab-mirror-pg.devtools.intel.com:29418/
+  insteadOf=git://gitlab-mirror-fm.devtools.intel.com/
+  insteadOf=ssh://gitlab-mirror-fm.devtools.intel.com/
+  insteadOf=ssh://gitlab-mirror-fm.devtools.intel.com:29418/
+  insteadOf=git://gitlab-mirror-ir.devtools.intel.com/
+  insteadOf=ssh://gitlab-mirror-ir.devtools.intel.com/
+  insteadOf=ssh://gitlab-mirror-ir.devtools.intel.com:29418/
+  insteadOf=git://gitlab-mirror-is.devtools.intel.com/
+  insteadOf=ssh://gitlab-mirror-is.devtools.intel.com/
+  insteadOf=ssh://gitlab-mirror-is.devtools.intel.com:29418/
+
+[url "ssh://git@gitlab.devtools.intel.com:29418/"]
+  pushInsteadOf=ssh://gitlab.devtools.intel.com/
+  pushInsteadOf=ssh://gitlab.devtools.intel.com:29418/
+  pushInsteadOf=ssh://gitlab-mirror-pg.devtools.intel.com/
+  pushInsteadOf=ssh://gitlab-mirror-pg.devtools.intel.com:29418/
+  pushInsteadOf=ssh://gitlab-mirror-fm.devtools.intel.com/
+  pushInsteadOf=ssh://gitlab-mirror-fm.devtools.intel.com:29418/
+  pushInsteadOf=ssh://gitlab-mirror-ir.devtools.intel.com/
+  pushInsteadOf=ssh://gitlab-mirror-ir.devtools.intel.com:29418/
+  pushInsteadOf=ssh://gitlab-mirror-is.devtools.intel.com/
+  pushInsteadOf=ssh://gitlab-mirror-is.devtools.intel.com:29418/
+
+[push]
+	default = matching
+
+[url "https://github.com/"]
+        insteadOf = git://github.com/
+
+[url "https://git.yoctoproject.org/git/"]
+        insteadOf = git://git.yoctoproject.org/
+
+[url "https://github.com/"]
+        insteadOf = ssh://git@github.com/
+
+[url "/mirrors/linux.git"]
+  #insteadOf=git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
+  insteadOf = ssh://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
+  insteadOf = http://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
+ 
+[url "/mirrors/linux-stable.git"]
+  #insteadOf=git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git 
+  insteadOf = ssh://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git
+  insteadOf = http://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git
+# comment out to avoid android repo sync issue: 
+#   error: vendor/intel/external/mediasdk_opensource/
+
+[credential]
+	helper = store
+
+
+[url "ssh://sys_oak@git-ger-8.devtools.intel.com:29418/"]
+  insteadOf = ssh://git-ger-8.devtools.intel.com/
+  insteadOf = ssh://git-ger-8.devtools.intel.com:29418/
+  insteadOf = git://git-ger-8.devtools.intel.com/
+  insteadOf = git://git-ger-8.devtools.intel.com:29418/
+
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge --skip -- %f
+	process = git-lfs filter-process --skip
+	required = true
+[filesystem "Private Build|1.8.0_222|/dev/sda4"]
+	timestampResolution = 1001 microseconds
+	minRacyThreshold = 6320 microseconds
+[advice]
+	detachedHead = false

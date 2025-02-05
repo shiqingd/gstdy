@@ -1,0 +1,105 @@
+# Define Webhook server configurations here
+log_dir: logs
+registry_file: event.lst
+jenkins_host: oak_jenkins
+os.linux.kernel.kernel-lts-staging:
+    jenkins_job: github-ci-kernel-lts-staging
+    # the testcase name should be consistent with that in githubci.jf
+    full_testcases:
+        - bannedwordscan              #  0
+        - checkpatch                  #  1
+        - compile_allyesconfig        #  2
+        - compile_allmodconfig        #  3
+        - compile_allnoconfig         #  4
+        - compile_allyesconfig_arm64  #  5
+        - compile_allmodconfig_arm64  #  6
+        - compile_allnoconfig_arm64   #  7
+        - compile_androidconfig       #  8
+        - compile_androidconfig_clang #  9
+        - scan2quilt                  # 10, disabled
+        - post_merge_quilt_deploy     # 11, disabled
+    
+    rules: 
+        base:
+            - branch: ^4.19\/android(_q|)(\/.*|)$
+              testcases: [0, 1, 8]
+            - branch: ^(4.19|5.10)\/android_(r|s|civ)(\/.*|)$
+              testcases: [0, 1, 8, 9]
+            - branch: ^4.14\/(base|yocto)(\/.*|)$
+              testcases: [2, 3, 4]
+            - branch: ^4.19\/(base|yocto|preempt-rt)(\/.*|)$
+              testcases: [0, 1, 2, 3, 4]
+            - branch: ^5.4\/(yocto|preempt-rt|xenomai)(\/.*|)$
+              testcases: [0, 1, 2, 3, 4, 5, 6, 7]
+            - branch: ^5.10\/(yocto|preempt-rt|adl|adl-ps|adl-n\/po\/yocto)(\/.*|)$
+              testcases: [0, 1, 2, 3, 4, 5, 6, 7]
+            - branch: ^IKT\/v5.10(\/.*|)$
+              testcases: [0, 1, 2, 3, 4, 5, 6, 7]
+            - branch: ^5.15\/(linux|preempt-rt)(\/.*|)$
+              testcases: [0, 1, 2, 3, 4, 5, 6, 7]
+            - branch: ^5.15\/(kmb|thb|ehl|adlp)\/mr\d\/(linux|preempt-rt)$
+              testcases: [0, 1, 2, 3, 4, 5, 6, 7]
+            - branch: ^5.15\/rplp\/po\/linux$
+              testcases: [0, 1, 2, 3, 4, 5, 6, 7]
+
+        base_exclude:
+        head:
+        head_exclude:
+            - branch: stable_update
+              testcases: [0, 1]
+        ref:
+        ref_exclude:
+os.linux.kernel.kernel-staging:
+    jenkins_job: github-ci-kernel-staging
+    # the testcase name should be consistent with that in githubci.jf
+    full_testcases:
+        - bannedwordscan              #  0
+        - checkpatch                  #  1
+        - compile_allyesconfig        #  2
+        - compile_allmodconfig        #  3
+        - compile_allnoconfig         #  4
+        - compile_allyesconfig_arm64  #  5
+        - compile_allmodconfig_arm64  #  6
+        - compile_allnoconfig_arm64   #  7
+        # obsoleted, replaced by quiltimport
+        #- bullpen_pull_request        #  8
+    rules: 
+        base:
+            - branch: ^bullpen\/v5.1[05]$
+              testcases: [0, 1, 2, 3, 4, 5, 6, 7]
+            - branch: ^iotg-next\/v5\.\d{2}[\d\.]*(-rc\d|)$
+              testcases: [1, 2, 3, 4, 5, 6, 7]
+        base_exclude:
+        head:
+        head_exclude:
+            - branch: stable_update
+              testcases: [0, 1]
+        ref:
+            - branch: ^(mainline-tracking|lts2020|lts2021|for-review|5.15\/yocto)(\/.*|)$
+              testcases: [0, 1, 2, 3, 4, 5, 6, 7]
+        ref_exclude:
+os.linux.kernel.mainline-tracking-staging:
+    jenkins_job: github-ci-mainline-tracking-staging
+    # the testcase name should be consistent with that in githubci.jf
+    full_testcases:
+        - bannedwordscan              #  0
+        - checkpatch                  #  1
+        - compile_allyesconfig        #  2
+        - compile_allmodconfig        #  3
+        - compile_allnoconfig         #  4
+        - compile_allyesconfig_arm64  #  5
+        - compile_allmodconfig_arm64  #  6
+        - compile_allnoconfig_arm64   #  7
+        - coverityscan                #  8
+        - coverityscan_arm64          #  9
+    rules:
+        base:
+            - branch: ^mainline-tracking\/v5\.\d{2}[\d\.]*(-rc\d|)$
+              testcases: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        base_exclude:
+        head:
+        head_exclude:
+            - branch: stable_update
+              testcases: [0, 1]
+        ref:
+        ref_exclude:

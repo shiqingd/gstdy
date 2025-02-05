@@ -1,0 +1,12 @@
+name : otcpkt.bj.intel.com/cbe/yocto.bj:v1.5.8.7
+base : otcpkt.bj.intel.com/cbe/yocto.bj:v1.5.8.6
+summary : install python 2 modules (jinja2,pyshell)
+
+1)install python module jinja2
+step : pip3 install jinja2
+
+2)install python module pyshell
+step : 
+	1.git clone https://github.com/knsathya/pyshell.git
+	2.cd pyshell
+	3.copy pyshell to usr/local/lib/python3.X/dist-packages/

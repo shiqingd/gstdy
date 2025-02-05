@@ -1,0 +1,85 @@
+FROM ubuntu:22.04
+
+ENV DEFAULT_USER=jenkins \
+    TZ=America/Los_Angeles \
+    LC_ALL=C \
+    SHELL=/bin/bash \
+    HTTP_PROXY=http://proxy-dmz.intel.com:911 \
+    HTTPS_PROXY=http://proxy-dmz.intel.com:912 \
+    SOCKS_PROXY=http://proxy-dmz.intel.com:911 \
+    FTP_PROXY=http://proxy-dmz.intel.com:911 \
+    ALL_PROXY=http://proxy-dmz.intel.com:911 \
+    NO_PROXY="intel.com, .intel.com, 10.0.0.0/8, 192.168.0.0/16, localhost, 127.0.0.0/8, 134.134.0.0/16" \
+    http_proxy=http://proxy-dmz.intel.com:911 \
+    https_proxy=http://proxy-dmz.intel.com:912 \
+    all_proxy=http://proxy-dmz.intel.com:911 \
+    npm_config_https_proxy=http://proxy-dmz.intel.com:911 \
+    npm_config_proxy=http://proxy-dmz.intel.com:911 \
+    socks_proxy=http://proxy-dmz.intel.com:911 \
+    ftp_proxy=http://proxy-dmz.intel.com:911 \
+    no_proxy="intel.com, .intel.com, 10.0.0.0/8, 192.168.0.0/16, localhost, 127.0.0.0/8, 134.134.0.0/16" \
+    PATH=/home/jenkins/bin:/home/jenkins/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    LLVM_VERSION=14
+
+COPY ./ci.tgz /tmp/ci.tgz
+
+RUN apt-get update && \
+    env DEBIAN_FRONTEND=noninteractive \
+      apt-get install -yq \
+        sudo build-essential git python3 bash gawk chrpath \
+        wget cpio texinfo lzop apt-utils bc screen libncurses5-dev locales \
+        libc6-dev-i386 patchutils ssh-client vim nano gawk wget git-core \
+        diffstat unzip texinfo socat libsdl1.2-dev xterm make xsltproc \
+        docbook-utils dblatex xmlto libglib2.0-dev xutils-dev m4 flex bison \
+        strace nfs-common libssl-dev libgmp-dev libmpfr-dev libmpc-dev \
+        pax-utils paxctl libiberty-dev binutils-dev openssl curl ocaml-nox \
+        elfutils libelf-dev zstd icecc default-jre python3-mako gettext liblz4-tool \
+        policycoreutils checkpolicy git-lfs kmod mtools squashfs-tools parted \
+        rpm2cpio cmake ninja-build gperf python3-ply python3-pip \
+        python3-setuptools python3-wheel xz-utils file gcc-multilib autoconf \
+        automake libtool gdb ncurses-base ncurses-term \
+        libncurses-dev pv rpm ntp software-properties-common connect-proxy \
+        openssh-server rsync python3-sh python-is-python3 python3-dev libsasl2-dev \
+        libldap2-dev libssl-dev python3-pexpect quilt libpq-dev python3-debian
+
+RUN add-apt-repository ppa:ubuntu-toolchain-r/test
+
+RUN apt-get update && \
+    env DEBIAN_FRONTEND=noninteractive \
+      apt-get install -yq python3-pandas python3-networkx postgresql-client \
+        sshfs iproute2
+
+RUN pip3 install django==4.2 django-auth-ldap django-extensions django-filter \
+      django-graphos django-inplaceedit django-jsonfield django-mathfilters \
+      django-xmlrpc djangorestframework django-simple-history ldap3 \
+      psycopg2-binary GitPython PyGithub kconfiglib pymongo asgiref \
+      psycopg2 sqlparse typing-extensions
+
+RUN bash -c "$(wget --no-check-certificate -O - https://apt.llvm.org/llvm.sh)" \
+               "" $LLVM_VERSION && \
+    sed -i '/llvm/d' /etc/apt/sources.list
+
+RUN echo "\
+Acquire::http::proxy \"${HTTP_PROXY}/\";\n\
+Acquire::https::proxy \"${HTTPS_PROXY}/\";\n\
+Acquire::ftp::proxy \"${FTP_PROXY}/\";\n\
+Acquire::socks::proxy \"${SOCKS_PROXY}/\";" | tee /etc/apt/apt.conf && \
+    sed -ri  '/^%sudo/s/ALL$/NOPASSWD:ALL/' /etc/sudoers && \
+    groupadd -g 1027 $DEFAULT_USER && \
+    useradd -ms /bin/bash -u 1027 -g 1027 -p '$1$cnGKG4s9$UUD1b5cHVG5vUu8FLKwqn0' $DEFAULT_USER && \
+    usermod -aG sudo $DEFAULT_USER && \
+    dpkg-reconfigure locales && \
+    echo "en_US.UTF-8 UTF-8" | tee -a /etc/locale.gen && \
+    locale-gen && \
+    ln -sf /usr/share/zoneinfo/$TZ /etc/localtime && \
+    echo "server corp.intel.com maxpoll 12" | tee -a /etc/ntp.conf && \
+    tar -C / -zxf /tmp/ci.tgz && \
+    rm /tmp/ci.tgz && \
+    mkdir /ci/jobs && \
+    chown -R $DEFAULT_USER:$DEFAULT_USER /ci && \
+    bash /ci/devops/docker/clang-alter.sh $LLVM_VERSION $LLVM_VERSION
+
+USER $DEFAULT_USER
+WORKDIR /home/$DEFAULT_USER
+
+CMD ["bash"]

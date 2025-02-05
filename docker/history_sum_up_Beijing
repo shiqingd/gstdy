@@ -1,0 +1,26 @@
+
+1)otcpkt.bj.intel.com/jiahua/yocto.jf:v1.5.8
+base on otcpkt.bj.intel.com/cbe/yocto.jf:v1.5.7
+upgrade gcc, from 9.3.0 to 10.3.0
+
+
+2)otcpkt.bj.intel.com/jiahua/yocto.jf:v1.5.8.1
+base on otcpkt.bj.intel.com/jiahua/yocto.jf:v1.5.8
+add two libs and corresponding head files, i.e.,
+apt install libnl-3-dev libnl-genl-3-dev
+
+
+3)otcpkt.bj.intel.com/jiahua/android.jf:v0.4.8.3
+base on otcpkt.bj.intel.com/jiahua/android.jf:v0.4.8
+copy /opt/poky/2.4.2/XXX to docker iamge for android_4.19 build test
+
+4)otcpkt.bj.intel.com/jiahua/android.jf:v0.4.12
+base on otcpkt.bj.intel.com/jiahua/android.jf:v0.4.8
+android patches has been moved from gerrit to github/innersource,
+and need to set-up DT environment and other steps(documnet forwarded by Pi Xiange)
+we set-up the env for it, we get 0.4.12
+
+5)otcpkt.bj.intel.com/cbe/android-civ.jf:v0.0.2
+-base on otcpkt.bj.intel.com/cbe/android.jf:v0.4.16
+-pip3 install meson==0.59.2
+-pip3 install mako (mako version is mako-1.2.3)

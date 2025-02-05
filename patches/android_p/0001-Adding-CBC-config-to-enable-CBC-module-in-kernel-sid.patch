@@ -1,0 +1,27 @@
+From 4b0050cb73f20a4e29f7d6e47b09b0c5c25bd0b7 Mon Sep 17 00:00:00 2001
+From: pixiange <xiange.pi@intel.com>
+Date: Wed, 2 Mar 2022 08:26:59 -0500
+Subject: [PATCH]  Adding CBC config to enable CBC module in kernel side
+
+ Signed-Off:  xiange.pi@intel.com
+
+Change-Id: Ib3e80180a722a7b8385e4a689963c49223e0a958
+---
+ bxt/android/non-embargoed/x86_64_defconfig | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/bxt/android/non-embargoed/x86_64_defconfig b/bxt/android/non-embargoed/x86_64_defconfig
+index ce6a54a..df2ebaf 100644
+--- a/bxt/android/non-embargoed/x86_64_defconfig
++++ b/bxt/android/non-embargoed/x86_64_defconfig
+@@ -2470,6 +2470,7 @@ CONFIG_ARCH_MIGHT_HAVE_PC_SERIO=y
+ #
+ CONFIG_TTY=y
+ CONFIG_VT=y
++# CONFIG_CBC_LDISC is not set
+ CONFIG_CONSOLE_TRANSLATIONS=y
+ CONFIG_VT_CONSOLE=y
+ CONFIG_VT_CONSOLE_SLEEP=y
+-- 
+2.31.1
+

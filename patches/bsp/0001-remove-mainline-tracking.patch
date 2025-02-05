@@ -1,0 +1,24 @@
+From ccf9ab39a4a990030d998f21626c363b6321af3f Mon Sep 17 00:00:00 2001
+From: sys_oak <sys_oak@intel.com>
+Date: Wed, 5 Jan 2022 21:58:19 -0800
+Subject: [PATCH] remove -mainline-tracking
+
+---
+ recipes-kernel/linux/linux-intel-ese-mlt_git.bb | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/recipes-kernel/linux/linux-intel-ese-mlt_git.bb b/recipes-kernel/linux/linux-intel-ese-mlt_git.bb
+index 03fb9f6..3ad3894 100644
+--- a/recipes-kernel/linux/linux-intel-ese-mlt_git.bb
++++ b/recipes-kernel/linux/linux-intel-ese-mlt_git.bb
+@@ -2,7 +2,6 @@ require ./linux-intel-ese-mlt.inc
+ require ./yocto-kernel-cache.inc
+ require ./linux-intel-ese.inc
+ 
+-LINUX_VERSION_EXTENSION:append = "-mainline-tracking"
+ KERNEL_PACKAGE_NAME = "${PN}-kernel"
+ 
+ # Optional kernel security harderning that may interfere with debugging
+-- 
+2.17.1
+

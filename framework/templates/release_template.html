@@ -1,0 +1,62 @@
+{% load static %}
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN">
+<html>
+<head>
+<link rel="stylesheet" type="text/css" href="static/css/release_email.css" />
+</head>
+<body class="c7">
+	<p class="c6"><span class="c2"><b><big>Production Kernel Team</b></big></span></p>
+	<p class="c6"><span class="c2" style="color:orange;"><em>*** {{ kernel.description }} is Intel {{ kernel.classification }} ***</em></span></p>
+	<p class="c6"><span class="c1 c5">[Release][{{ kernel.current_baseline }}][{{ kernel.description }}] {{ staging_number }}</span></p>
+	<p class="c0 c3"></p>
+	<p class="c0"><span class="c1"><br>Release Summary:</span><span class="c2">:</span><br>
+	{{ release_summary }}
+	</p>
+	<p class="c0"><span class="c2">List of patches integrated (change log)</span>
+	{{ change_log }}</p>
+	<p class="c0"><span class="c4 c1">Difference patch table link:</span><br></p>
+	&emsp;&emsp;{{ patch_difference_url }}
+	<br>
+	<p class="c0 c3"></p>
+	<p class="c0"><span class="c4 c1"><br>Known Issues:</span>
+	{{ known_issues }}
+	</p>
+	<p class="c0"><span class="c5 c1">link to PKT tickets</span></p>
+	<p class="c0 c3"></p>
+	<p class="c0"><span class="c4 c1">Build Collateral:</span><br>
+	<p>Kernel git clone URLs:</p>
+	{% for set in reposets %}
+		<br>{{ set.repo.project }} :<br>
+		<pre>{{ set.repo.url }}</pre>
+		<p><span class="c4 c1">&ensp;Branches:</span><br>
+		<table>
+		{% for r in set.releases %}
+			<tr><td>{{ set.kernel.base_kernel }}/{{ r.release.name }}</td><td>:</td><td>{{ r.tip }}</td></tr>
+		{% endfor %}
+		</table>
+		<p><span class="c4 c1">&ensp;Tags:</span><br>
+		<table>'
+		{% for r in set.releases %}
+			<tr><td>{{ set.kernel.current_baseline }}-{{ r.release.name }}-{{ staging_number }}</td><td>:</td><td>{{ r.tag }}</td></tr>
+		{% endfor %}
+		</table>
+	{% endfor %}
+	<p class="c0"><span class="c4 c1"><br>JSON difference patch link:</span><br>
+	{% for set in reposets %}
+		{% if set.repo.project != 'kernel-config' %}
+			{% for r in set.releases %}
+				{{ r.release.name }} : &emsp;&emsp;http://otcpkt.bj.intel.com:9000/json/{{ set.kernel.category }}-{{ set.kernel.current_baseline }}-{{ r.release.name }}-{{ staging_number }}<br>
+			{% endfor %}
+		{% endif %}
+	{% endfor %}
+	<p>
+	<p class="c0 c3"></p>
+	<p class="c0"><span class="c5 c1"><br>Link to Protex IP Scan results</span></p>
+	{% for r in set.releases %}
+		{{ r.protex_scan_url }}<br>
+	{% endfor %}
+	<p class="c0"><span class="c2"><br>Coverity Scan results:</span></p>{{ coverity_url }} <br>
+	<p class="c0 c3"></p>
+	<hr style="page-break-before:always;display:none;">
+</body>
+</html>

@@ -1,0 +1,124 @@
+image: "otcpkt.bj.intel.com/gitlab-ci/ci-test:0.2"
+#this line is only for test
+stages:
+  - merge_request
+  - branch_update
+  - branch_test
+  #use for dump env parameters for branch based pipeline
+build_project:
+#Sample job for merge request pipeline
+  stage: merge_request
+  before_script:
+    #- export LC_ALL=C
+    #- pip3 install -r /build/requirements.txt 
+    - pwd
+    #- ssh -f -N -L 3334:oak-pkpt.ostc.intel.com:5432 -o "IdentityFile ~/.ssh/postgres_rsa" postgres@oak-pkpt.ostc.intel.com
+    #- ps -aux | grep 3334
+    - git clone ssh://git@gitlab.devtools.intel.com:29418/linux-kernel-integration/lkit-dev-ops ../lkit-dev-ops
+  script:
+    - 'echo "Previous revision: $CI_COMMIT_BEFORE_SHA"'
+    - 'echo "Merge request source branch: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"'
+    - 'echo "Merge request target branch: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME"'
+    - 'echo "Current revision: $CI_COMMIT_SHA"'
+    - 'echo "Merge request labels: $CI_MERGE_REQUEST_LABELS"'
+    - 'echo "Merge request project ID: $CI_MERGE_REQUEST_PROJECT_ID"'
+    - 'echo "Merge request ID: $CI_MERGE_REQUEST_IID"'
+    - git fetch --all
+    - python3 --version
+    - cd ../lkit-dev-ops
+    - git checkout origin/sandbox/yifan/quilt1210
+    - source envs_for_testing.sh
+    - python3 testAndUpdateQuilt.py
+    - touch generate.log
+    - cd -
+    - rm -rf ../lkit-dev-ops
+    #- python3 get_mr_details.py mergerequest $CI_MERGE_REQUEST_PROJECT_ID $CI_MERGE_REQUEST_IID
+    #- git format-patch origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME..origin/$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME
+    #- ./testAndUpdateQuilt.sh *.patch | tee quiltgen.log
+  artifacts:
+    paths:
+      - generate.log
+    when: always
+  rules:
+#need update
+    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "5.10/yocto"'
+      when: always
+  tags:
+    - oak-05
+
+deplo_post_merge:
+#Sample job for branch update
+  stage: branch_update
+  before_script:
+    #- export LC_ALL=C
+    #- pip3 install -r /build/requirements.txt
+    - pwd
+    #- ssh -f -N -L 3334:oak-pkpt.ostc.intel.com:5432 -o "IdentityFile ~/.ssh/postgres_rsa" postgres@oak-pkpt.ostc.intel.com
+    #- ps -aux | grep 3334
+    - git clone ssh://git@gitlab.devtools.intel.com:29418/linux-kernel-integration/lkit-dev-ops ../lkit-dev-ops
+  script:
+    - 'echo "Previous revision: $CI_COMMIT_BEFORE_SHA"'
+    - 'echo "Merge request source branch: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"'
+    - 'echo "Merge request target branch: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME"'
+    - 'echo "Current revision: $CI_COMMIT_SHA"'
+    - 'echo "Merge request labels: $CI_MERGE_REQUEST_LABELS"'
+    - 'echo "Merge request project ID: $CI_MERGE_REQUEST_PROJECT_ID"'
+    - 'echo "Merge request ID: $CI_MERGE_REQUEST_IID"'
+    - git fetch --all
+    - python3 --version
+    - cd ../lkit-dev-ops
+    - git checkout origin/sandbox/yifan/quilt1210
+    - source envs_for_testing_mr.sh
+    - python3 testAndUpdateQuilt-post-MR.py
+    - cd -
+    - rm -rf ../lkit-dev-ops
+    #- python3 get_mr_details.py mergerequest $CI_MERGE_REQUEST_PROJECT_ID $CI_MERGE_REQUEST_IID
+    #- git format-patch origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME..origin/$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME
+    #- ./testAndUpdateQuilt.sh *.patch | tee quiltgen.log
+  artifacts:
+    paths:
+      - generate.log
+    when: always
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "5.10/yocto"'
+      when: always
+  tags:
+    - oak-05
+
+test_branch_pipeline:
+#Sample job for get branch information where the commit goes from
+  stage: branch_update
+  before_script:
+    #- export LC_ALL=C
+    #- pip3 install -r /build/requirements.txt
+    - pwd
+    #- ssh -f -N -L 3334:oak-pkpt.ostc.intel.com:5432 -o "IdentityFile ~/.ssh/postgres_rsa" postgres@oak-pkpt.ostc.intel.com
+    #- ps -aux | grep 3334
+    - git clone ssh://git@gitlab.devtools.intel.com:29418/linux-kernel-integration/lkit-dev-ops ../lkit-dev-ops
+  script:
+    - 'echo "Previous revision: $CI_COMMIT_BEFORE_SHA"'
+    - 'echo "Merge request source branch: $CI_COMMIT_BRANCH"'
+    - 'echo "Current revision: $CI_COMMIT_SHA"'
+    - 'echo "Merge request ID: $CI_PROJECT_ID"'
+    - git fetch --all
+    - python3 --version
+    - cd ../lkit-dev-ops
+    - git checkout origin/sandbox/yifan/quilt1210
+    - source envs_for_testing_mr.sh
+    #- python3 testAndUpdateQuilt-post-MR.py
+    - touch generate.log
+    - python3 get_mr_details.py commit $CI_PROJECT_ID $CI_COMMIT_SHA
+    - cd -
+    - rm -rf ../lkit-dev-ops
+    #- git format-patch origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME..origin/$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME
+    #- ./testAndUpdateQuilt.sh *.patch | tee quiltgen.log
+    
+  artifacts:
+    paths:
+      - generate.log
+    when: always
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "sandbox/yifan/5.10"'
+      when: always
+  tags:
+    - oak-05

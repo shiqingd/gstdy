@@ -1,0 +1,25 @@
+From f0e54f2e45cd84392c45fdd87c1021a58922dc51 Mon Sep 17 00:00:00 2001
+From: sys_oak <sys_oak@intel.com>
+Date: Thu, 20 Jun 2024 02:17:12 -0700
+Subject: [PATCH] Change master branch to main branch name
+
+---
+ recipes-multimedia/onevpl/onevpl_2023.4.0.bb | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/recipes-multimedia/onevpl/onevpl_2023.4.0.bb b/recipes-multimedia/onevpl/onevpl_2023.4.0.bb
+index 513c7f2c..66496fa3 100644
+--- a/recipes-multimedia/onevpl/onevpl_2023.4.0.bb
++++ b/recipes-multimedia/onevpl/onevpl_2023.4.0.bb
+@@ -8,7 +8,7 @@ LICENSE = "MIT"
+ LIC_FILES_CHKSUM = "file://LICENSE;md5=c18ea6bb4786a26bf4eee88a7424a408 \
+                     file://third-party-programs.txt;md5=0e35a23482445dd089b4eabe19103a06"
+ 
+-SRC_URI = "git://github.com/oneapi-src/oneVPL.git;protocol=https;branch=master \
++SRC_URI = "git://github.com/oneapi-src/oneVPL.git;protocol=https;branch=main \
+            file://0001-vpl.pc.in-dont-pass-pcfiledir-to-cflags.patch \
+             "
+ SRCREV = "2274efcd3672b43297ef774f332e1fed6781381c"
+-- 
+2.25.1
+

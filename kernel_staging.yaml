@@ -1,0 +1,38 @@
+kernel:
+    mlt:
+        default:
+            artifacts:
+                kconf:
+                    dir:
+                    rep:
+                initramfs:
+                    dir:
+                    rep:
+                img:
+                    dir:
+                    rep:
+            build_number_rep: 
+            kconfigs:
+                - xx
+        tgl-ddt:
+    lts2021:
+    5.10lts:
+        default:
+            artifacts:
+                base_url: https://ubit-artifactory-ba.intel.com/artifactory/pse-tgl-local/yocto/builds/2021/development/Mainline_BKC/
+                kconf:
+                    dir: tmp-x86-2020-glibc
+                    rep: ^\s*(\.config)\s*$
+                initramfs:
+                    dir: tmp-x86-musl-musl
+                    rep: ^\s*(mender-initramfs-intel-corei7-64-\d{14}.rootfs.cpio.bz2)\s*$
+                    archive: bz2
+                img:
+                    dir: tmp-x86-2020-glibc
+                    rep: ^\s*(core-image-sato-intel-corei7-64-\d{14}.wic.bz2)\s*$
+                    archive: bz2
+            build_number_rep: \/(\d{8}-\d{4})\/
+            kconfigs:
+        tgl:
+        kmb:
+    lts2019:

@@ -1,0 +1,48 @@
+StrictHostKeyChecking no
+#BatchMode yes
+
+host android.intel.com
+    port 29418
+    user sys_oak
+    HostkeyAlgorithms +ssh-dss
+    IdentityFile ~/.ssh/sys_oak
+
+host android-*.devtools.intel.com
+    port 29418
+    user sys_oak
+    HostkeyAlgorithms +ssh-dss
+    IdentityFile ~/.ssh/sys_oak
+
+host git-*.devtools.intel.com
+    port 29418
+    user sys_oak
+    HostkeyAlgorithms +ssh-dss
+    IdentityFile ~/.ssh/sys_oak
+
+host github.com
+    user git
+    IdentityFile ~/.ssh/sys_oak
+
+host tmp-oak-*.ostc.intel.com
+    user jenkins
+    HostkeyAlgorithms +ssh-dss
+    IdentityFile ~/.ssh/sys_oak
+
+host oak-*.jf.intel.com
+    user jenkins
+    HostkeyAlgorithms +ssh-dss
+    IdentityFile ~/.ssh/sys_oak
+
+host oak-*.ostc.intel.com
+    user jenkins
+    HostkeyAlgorithms +ssh-dss
+    IdentityFile ~/.ssh/sys_oak
+
+host tmp-oak-*.ostc.intel.com
+    user jenkins
+    HostkeyAlgorithms +ssh-dss
+    IdentityFile ~/.ssh/sys_oak
+
+host gitlab.devtools.intel.com
+    user git
+    IdentityFile ~/.ssh/sys_oak

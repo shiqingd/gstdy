@@ -1,0 +1,140 @@
+FROM docker-registry.intel.com/public/docker-base:18.04
+MAINTAINER Cactus Infrastructure "cactus-infrastructure@intel.com"
+
+ENV DEFAULT_USER=jenkins \
+    TZ=America/Los_Angeles \
+    LANG=en_US.utf8 \
+    HTTP_PROXY=http://proxy.jf.intel.com:911 \
+    HTTPS_PROXY=http://proxy.jf.intel.com:912 \
+    SOCKS_PROXY=http://proxy.jf.intel.com:911 \
+    FTP_PROXY=http://proxy.jf.intel.com:911 \
+    ALL_PROXY=http://proxy.jf.intel.com:911 \
+    NO_PROXY="intel.com,.intel.com,10.0.0.0/8,localhost,127.0.0.1" \
+    http_proxy=http://proxy.jf.intel.com:911 \
+    https_proxy=http://proxy.jf.intel.com:912 \
+    all_proxy=http://proxy.jf.intel.com:911 \
+    npm_config_https_proxy=http://proxy.jf.intel.com:911 \
+    npm_config_proxy=http://proxy.jf.intel.com:911 \
+    socks_proxy=http://proxy.jf.intel.com:911 \
+    ftp_proxy=http://proxy.jf.intel.com:911 \
+    no_proxy="intel.com,.intel.com,localhost,127.0.0.1" \
+    PATH=/home/jenkins/bin:/home/jenkins/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    ANDROID_HOME=/opt/android \
+    PATH=$PATH:/opt/android/tools:/opt/android/platform-tools
+
+COPY ./install /tmp/install
+RUN \
+# packages Preconfiguration & locales
+    apt-get update &&\
+    apt-get install -y \
+        lzop language-pack-en apt-utils dialog debconf-utils console-setup software-properties-common python-pip software-properties-common &&\
+    locale-gen en_US.UTF-8 && \
+    update-locale LANG="en_US.UTF-8" LANGUAGE="en_US.UTF-8" LC_ALL="en_US.UTF-8" LC_CTYPE="C" && \
+    debconf-set-selections ./tmp/install/install.seed &&\
+    dpkg --add-architecture i386 &&\
+# PPA : git, OpenJDK 7,8
+    apt-add-repository ppa:git-core/ppa &&\
+    add-apt-repository ppa:openjdk-r/ppa &&\
+    apt-get update &&\
+# Installing package dependencies
+# CACTUS-13819 Install EFI tools to support GP2.0 and Celadon UEFI compiling in buildbot,16.July.2018
+    apt-get install -y \
+        git gnupg flex bison gperf build-essential lunch gpgv gcc ant gawk bc mtools xvfb diffstat chrpath bsdmainutils \
+        gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+        vim zip curl libc6-dev x11proto-core-dev libgl1-mesa-dev g++-multilib dos2unix squashfs-tools texinfo socat \
+        tofrodos libxml2-utils xsltproc libssl-dev libxslt1-dev imagemagick sbsigntool libncurses5 libsdl1.2-dev \
+        gtk2-engines gtk2-engines-murrine libffi-dev python-markdown \
+        python-yaml python-foolscap python-dev python-virtualenv python-argparse python-lxml python-httplib2 python-crypto \
+        python-mako python-pystache python-libxml2 gettext libncurses5:i386 libxml2:i386 libstdc++6:i386 zlibc:i386 zlib1g-dev:i386 libgl1-mesa-glx:i386 \
+        libx11-dev:i386 libqtgui4:i386 krb5-user libkrb5-dev openjdk-8-jdk device-tree-compiler \
+        rsync acl dosfstools ntfs-3g psmisc udisks2 dnsutils liblz4-tool libelf-dev android-tools-fsutils ccache nasm git-email \
+        gcc-multilib g++-multilib libncurses5-dev connect-proxy sbsigntool dosfstools efitools aria2 apt-transport-https ca-certificates curl software-properties-common clamav clamav-freshclam cpio kmod libxkbcommon-x11-0 cmake clang libcairo2-dev libegl1-mesa-dev libgles2-mesa-dev libgbm-dev libxi-dev cryptsetup-bin libjson-c-dev aidl libxinerama-dev openssh-server ntp &&\
+    dpkg-reconfigure -p critical dash &&\
+    #apt-get install -y \
+    #    sudo &&\
+# Cleanup
+    apt-get clean && rm -rf /var/lib/apt/lists/* && \
+# Build Python 3.5.6 locally
+    cd /tmp && \
+    wget https://www.python.org/ftp/python/3.5.6/Python-3.5.6.tgz && \
+    tar -xvzf Python-3.5.6.tgz && \
+    cd Python-3.5.6 && \
+    ./configure --enable-loadable-sqlite-extensions --enable-optimizations && \
+    make && \
+    make install && \
+    ldconfig && \
+    chmod -R 777 /var/log/clamav/ /var/lib/clamav/ /etc/clamav/ && \
+#install docker same as docker version of CoreOs
+#RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -  &&\
+#  #  add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu bionic stable"  &&\
+#    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" &&\
+#    apt-get update  &&\
+#    apt -y install docker-ce
+#docker-ce=17.09.1~ce-0~ubuntu
+# Setup "Intel" virtualenv
+#    rm /usr/share/python-virtualenv/pip-* &&\
+#    rm /data/_slavescripts/ -rf &&\
+#    cd /usr/share/python-virtualenv/ &&\
+#    wget https://mcg-depot.intel.com/artifactory/pypi/pip-1.5.6_intelsslcerts-py2.py3-none-any.whl &&\
+#    wget https://mcg-depot.intel.com/artifactory/pypi/pip-1.5.6-intelsslcerts.tar.gz &&\
+#    chmod a+r /usr/share/python-virtualenv/pip-1.5.6* &&\
+    echo "\
+Acquire::http::proxy \"${HTTP_PROXY}/\";\n\
+Acquire::https::proxy \"${HTTPS_PROXY}/\";\n\
+Acquire::ftp::proxy \"${FTP_PROXY}/\";\n\
+Acquire::socks::proxy \"${SOCKS_PROXY}/\";" | tee /etc/apt/apt.conf && \
+    useradd -ms /bin/bash -u 1027 -p '$1$cnGKG4s9$UUD1b5cHVG5vUu8FLKwqn0' $DEFAULT_USER && \
+    usermod -aG sudo $DEFAULT_USER && \
+    ln -sf /usr/share/zoneinfo/$TZ /etc/localtime && \
+    echo "server corp.intel.com maxpoll 12" | tee -a /etc/ntp.conf && \
+    mkdir /var/run/sshd && \
+    rm /data/_slavescripts/ -rf && \
+# install Oracle JDk 6
+    mkdir -p /usr/lib/jvm && \
+    wget https://shstor001.sh.intel.com/artifactory/sis-deploy-sh/java/jdk-6u45-linux-x64.bin -O /usr/lib/jvm/jdk6.bin && \
+    chmod 755 /usr/lib/jvm/jdk6.bin && \
+    cd /usr/lib/jvm/ && \
+    /usr/lib/jvm/jdk6.bin && \
+    rm -f /usr/lib/jvm/jdk6.bin && \
+# other pkg
+# add python lz4 0.8.2
+    pip install lz4==2.1.2 && \
+# add Android SDK
+    mkdir -p $ANDROID_HOME && \
+    cd $ANDROID_HOME && \
+    wget https://dl.google.com/android/repository/tools_r25.2.3-linux.zip -O tools.zip && \
+    unzip tools.zip && \
+    rm tools.zip && \
+    echo "y" | android update sdk --no-ui -a --proxy-host proxy-chain.intel.com --proxy-port 912 --filter extra,tools,platform-tools,android-16,android-19,android-23,build-tools-19.1.0,build-tools-21.1.2,build-tools-22.0.1,build-tools-23.0.2,build-tools-23.0.3,build-tools-24.0.2,build-tools-25.0.2 && \
+# CACTUS-10411
+    pip install networkx==2.2 && \
+# Upgrade pip to 19.2.3
+    pip install --upgrade pip==19.2.3
+# Install cryptography & openssl
+RUN \
+    pip install --upgrade cryptography==2.7 -t /usr/lib/python2.7/dist-packages && \
+    rm -rf /usr/lib/python2.7/dist-packages/OpenSSL &&\                 
+    rm -rf /usr/lib/python2.7/dist-packages/pyOpenSSL-0.15.1.egg-info &&\
+    pip install pyopenssl==19.0.0 -t /usr/lib/python2.7/dist-packages && \
+    mkdir -p /opt/deb-pkg && \
+    cd /opt/deb-pkg/ && \
+    wget http://mirrors.kernel.org/ubuntu/pool/main/j/json-c/libjson-c4_0.13.1+dfsg-4_amd64.deb -O libjson-c4.deb && \
+    dpkg -i libjson-c4.deb && \
+    rm libjson-c4.deb && \
+    cd - && \
+    cp ./tmp/install/pip /usr/bin/ && \
+    cp ./tmp/install/pip /usr/local/bin/ && \
+    rm -rf /usr/lib/python2.7/dist-packages/pip && \
+    cp ./tmp/install/pip /usr/lib/python2.7/dist-packages/ && \
+    chmod 777 /usr/bin/pip &&\
+    chmod 777 /usr/local/bin/pip &&\
+    chmod 777 /usr/lib/python2.7/dist-packages/pip && \
+    apt-get update && \
+    apt-get install -y sudo --option=Dpkg::Options::=--force-confdef && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+USER $DEFAULT_USER
+WORKDIR /home/$DEFAULT_USER
+
+CMD ["/usr/sbin/service", "ssh", "start"]
+CMD ["/usr/sbin/sshd", "-D"]

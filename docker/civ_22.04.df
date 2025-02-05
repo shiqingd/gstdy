@@ -1,0 +1,133 @@
+FROM ubuntu:22.04
+
+# Passing two paras for setting up docker image
+# 1: user: coming from host user
+# 2: groudid: match with usr
+# 3: proxy: Beijing Proxy:  http://child-prc.intel.com:913
+# 4: typeofssl: version(1.1.1f)
+# 5: default timeregion is Shanghai
+ARG usracc
+ARG groupid
+ARG proxyloc
+ARG typeofssl
+ARG timeregion
+
+# Update system proxy and vairable
+ENV DEFAULT_USER=jenkins \
+    TZ=America/Los_Angeles \
+    LANG=en_US.utf8 \
+    HTTP_PROXY=http://proxy-dmz.intel.com:911 \
+    HTTPS_PROXY=http://proxy-dmz.intel.com:912 \
+    SOCKS_PROXY=http://proxy-dmz.intel.com:911 \
+    FTP_PROXY=http://proxy-dmz.intel.com:911 \
+    ALL_PROXY=http://proxy-dmz.intel.com:911 \
+    NO_PROXY="intel.com, .intel.com, 10.0.0.0/8, 192.168.0.0/16, localhost, 127.0.0.0/8, 134.134.0.0/16" \
+    http_proxy=http://proxy-dmz.intel.com:911 \
+    https_proxy=http://proxy-dmz.intel.com:912 \
+    all_proxy=http://proxy-dmz.intel.com:911 \
+    npm_config_https_proxy=http://proxy-dmz.intel.com:911 \
+    npm_config_proxy=http://proxy-dmz.intel.com:911 \
+    socks_proxy=http://proxy-dmz.intel.com:911 \
+    ftp_proxy=http://proxy-dmz.intel.com:911 \
+    no_proxy="intel.com, .intel.com, 10.0.0.0/8, 192.168.0.0/16, localhost, 127.0.0.0/8, 134.134.0.0/16" \
+    PATH=/home/jenkins/bin:/home/jenkins/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Update APT Tool Proxy
+RUN echo "\
+Acquire::http::proxy \"${HTTP_PROXY}/\";\n\
+Acquire::https::proxy \"${HTTPS_PROXY}/\";\n\
+Acquire::ftp::proxy \"${FTP_PROXY}/\";\n\
+Acquire::socks::proxy \"${SOCKS_PROXY}/\";" | tee /etc/apt/apt.conf
+
+# Add User
+RUN useradd -ms /bin/bash -u 1027 -p '$1$cnGKG4s9$UUD1b5cHVG5vUu8FLKwqn0' $DEFAULT_USER && \
+    usermod -aG sudo $DEFAULT_USER
+
+# Update Lan and Location
+RUN apt-get update && \
+    env DEBIAN_FRONTEND=noninteractive \
+    apt-get install -yq locales ntp && \
+    dpkg-reconfigure locales && \
+    echo "en_US.UTF-8 UTF-8" | tee -a /etc/locale.gen && \
+    locale-gen && \
+    ln -sf /usr/share/zoneinfo/$TZ /etc/localtime && \
+    echo "server corp.intel.com maxpoll 12" | tee -a /etc/ntp.conf && \
+    mkdir /var/run/sshd
+
+# Install Yoctol build tools
+#RUN apt-get update && \
+RUN   apt-get update && \
+      env DEBIAN_FRONTEND=noninteractive \
+      apt-get install -yq \
+        sudo build-essential git  man bash diffstat gawk  \
+        wget cpio texinfo lzop apt-utils bc screen libncurses5-dev  \
+        libc6-dev-i386 patchutils ssh-client vim nano gawk git-core        \
+        diffstat unzip texinfo socat libsdl1.2-dev xterm make xsltproc     \
+        docbook-utils dblatex xmlto libglib2.0-dev xutils-dev m4 flex bison \
+        strace nfs-common libssl-dev libgmp-dev libmpfr-dev libmpc-dev       \
+        pax-utils paxctl libiberty-dev binutils-dev curl ocaml-nox          \
+        elfutils libelf-dev zstd icecc openjdk-8-jre-headless                      \
+        openjdk-11-jdk-headless  gettext liblz4-tool                               \
+        policycoreutils checkpolicy git-lfs kmod mtools squashfs-tools parted      \
+        rpm2cpio cmake ninja-build gperf chrpath  glslang-tools                    \
+        xz-utils file gcc g++ gcc-multilib autoconf        \
+        automake libtool gdb  ncurses-base ncurses-term   \
+        libncurses-dev pv rpm  software-properties-common connect-proxy  \
+        openssh-server rsync  uuid-dev fastboot u-boot-tools device-tree-compiler   \
+        python3  python3-pip python3-ply python3-setuptools python3-wheel \
+        python3-sh python3-pexpect  python3-django
+
+# if not assign python, repo tool will not work
+# because only python3 is installed
+# Android P/Q/R/S need used python2
+# Android T & celaodon python3
+RUN   env DEBIAN_FRONTEND=noninteractive \
+      apt-get install -yq python2
+
+#RUN add-apt-repository ppa:ubuntu-toolchain-r/test
+#RUN pip3 install pytz
+
+
+# Android_P/Q/R/S need install openssl old verson 1.1.1f on ubuntu22.04
+RUN \
+    if [ "$typeofssl"  =  "1.1.1f" ];  then                               \
+        ln -sf /usr/bin/python2 /usr/bin/python ;                         \
+        wget http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2.17_amd64.deb  -O  /home/$DEFAULT_USER/libssl1.1_1.1.1f-1ubuntu2.17_amd64.deb ;        \
+        cd /home/$DEFAULT_USER ;                                          \
+        dpkg -i libssl1.1_1.1.1f-1ubuntu2.17_amd64.deb ;                  \
+        wget http://security.ubuntu.com/ubuntu/pool/main/o/openssl/libssl-dev_1.1.1f-1ubuntu2.17_amd64.deb -O /home/$DEFAULT_USER/libssl-dev_1.1.1f-1ubuntu2.17_amd64.deb ;        \
+        cd /home/$DEFAULT_USER ;                                           \
+        dpkg -i libssl-dev_1.1.1f-1ubuntu2.17_amd64.deb ;                  \
+        wget http://security.ubuntu.com/ubuntu/pool/main/o/openssl/openssl_1.1.1f-1ubuntu2.17_amd64.deb -O /home/$DEFAULT_USER/openssl_1.1.1f-1ubuntu2.17_amd64.deb  ;             \
+        cd /home/$DEFAULT_USER ;                                           \
+        dpkg -i openssl_1.1.1f-1ubuntu2.17_amd64.deb ;                     \
+    else                                                                  \
+        ln -sf /usr/bin/python3 /usr/bin/python ;                         \
+        apt-get install -yq openssl  ;                                    \
+    fi
+
+
+
+# Above tool can use for yocto build
+# Install below tool for celadon in virtual build
+RUN   env DEBIAN_FRONTEND=noninteractive \
+      apt-get install -yq libncurses5 libncurses5 dosfstools efitools python3-pystache \
+      fakeroot cryptsetup-bin cutils pkg-config xorriso
+
+RUN pip3 install --proxy=${HTTP_PROXY} mako==1.1.0  && \
+    pip3 install --proxy=${HTTP_PROXY} meson==1.0.0 && \
+    pip3 install --proxy=${HTTP_PROXY} --upgrade cryptography
+
+
+# Android IFWI build tools
+RUN apt-get install -y libxkbcommon-x11-0 libxcb-icccm4  libxcb-image0 libxcb-keysyms1
+RUN apt-get install -y libxcb-xkb1 libxcb-shape0 libxcb-xinerama0 libxcb-randr0 libxcb-render-util0
+#error libxcb-randr0 libxcb-render-util0
+
+
+USER $DEFAULT_USER
+WORKDIR /home/$DEFAULT_USER
+
+CMD ["/usr/sbin/service", "ssh", "start"]
+CMD ["/usr/sbin/sshd", "-D"]
+

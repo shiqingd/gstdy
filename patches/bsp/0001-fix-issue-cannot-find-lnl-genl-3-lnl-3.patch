@@ -1,0 +1,21 @@
+From cc0b7f816d8d658eefc00470dee8d891e0351497 Mon Sep 17 00:00:00 2001
+From: sys_oak <sys_oak@intel.com>
+Date: Fri, 9 Sep 2022 06:24:45 -0700
+Subject: [PATCH] fix issue: cannot find -lnl-genl-3 -lnl-3
+
+---
+ meta-oe/recipes-kernel/intel-speed-select/intel-speed-select.bb | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/meta-oe/recipes-kernel/intel-speed-select/intel-speed-select.bb b/meta-oe/recipes-kernel/intel-speed-select/intel-speed-select.bb
+index c895e6c1d4..b49cd98429 100644
+--- a/meta-oe/recipes-kernel/intel-speed-select/intel-speed-select.bb
++++ b/meta-oe/recipes-kernel/intel-speed-select/intel-speed-select.bb
+@@ -28,3 +28,4 @@ do_compile() {
+ do_install() {
+ 	oe_runmake DESTDIR=${D} install
+ }
++DEPENDS += "libnl"
+-- 
+2.25.1
+

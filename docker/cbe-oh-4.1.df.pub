@@ -1,0 +1,68 @@
+FROM ubuntu:22.04
+
+ENV DEFAULT_USER=xxx \
+    OHTOOLS_DIR=/ohtools \
+    OHBALLS_DIR=/tmp/ohballs \
+    TZ=Asia/Shanghai \
+    LANG=en_US.utf8 \
+    LANGUAGE=en_US.UTF-8 \
+    LC_ALL=en_US.UTF-8 \
+
+ENV PATH=$OHTOOLS_DIR/llvm/bin:$OHTOOLS_DIR/hc-gen:$OHTOOLS_DIR/gcc_riscv32/bin:$OHTOOLS_DIR/ninja:$OHTOOLS_DIR/node-v14.15.4-linux-x64/bin:$OHTOOLS_DIR/gn:/home/$DEFAULT_USER/bin:/home/$DEFAULT_USER/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+ADD ./ohballs $OHBALLS_DIR
+
+RUN apt-get update -y \
+    && apt-get install -y apt-utils binutils bison flex bc build-essential make mtd-utils gcc-arm-linux-gnueabi u-boot-tools python3 python3-pip git zip unzip curl wget gcc g++ ruby dosfstools mtools default-jre default-jdk scons python3-distutils perl openssl libssl-dev cpio git-lfs m4 ccache zlib1g-dev tar rsync liblz4-tool genext2fs binutils-dev device-tree-compiler e2fsprogs git-core gnupg gnutls-bin gperf lib32ncurses5-dev libffi-dev zlib* libelf-dev libx11-dev libgl1-mesa-dev lib32z1-dev xsltproc x11proto-core-dev libc6-dev-i386 libxml2-dev lib32z-dev libdwarf-dev \
+    && apt-get install -y grsync xxd libglib2.0-dev libpixman-1-dev kmod jfsutils reiserfsprogs xfsprogs squashfs-tools  pcmciautils quota ppp libtinfo-dev libtinfo5 libncurses5 libncurses5-dev libncursesw5 libstdc++6 python2.7 gcc-arm-none-eabi xorg-dev python3-mako meson grub-efi-amd64 f2fs-tools fdisk \
+    && apt-get install -y vim ssh locales sudo \
+    && apt-get install -y doxygen libxml2-dev libxslt-dev python3-lxml nasm cmake \
+    && locale-gen "$LANG" \
+    && rm -rf /bin/sh /usr/bin/python /usr/bin/python3 /usr/bin/python3m \
+    && ln -s /bin/bash /bin/sh \
+    && ln -s /usr/bin/python3.10 /usr/bin/python3 \
+    && ln -s /usr/bin/python3.10 /usr/bin/python3m \
+    && ln -s /usr/bin/python3.10 /usr/bin/python \
+    && curl https://gitee.com/oschina/repo/raw/fork_flow/repo-py3 > /usr/bin/repo \
+    && chmod +x /usr/bin/repo
+
+RUN pip3 install --trusted-host https://repo.huaweicloud.com -i https://repo.huaweicloud.com/repository/pypi/simple requests setuptools pymongo kconfiglib pycryptodome ecdsa ohos-build pyyaml prompt_toolkit==1.0.14 redis json2html yagmail python-jenkins \
+    && pip3 install esdk-obs-python --trusted-host pypi.org \
+    && pip3 install testresources \
+    && pip3 install six --upgrade --ignore-installed six \
+    && patch -d / -p1 -i $OHBALLS_DIR/prompt_toolkit-01-import-issue.patch \
+    && mkdir -p $OHTOOLS_DIR \
+    && mkdir -p $OHTOOLS_DIR/gn \
+    && tar -jxvf $OHBALLS_DIR/clang-530132-linux-x86_64.tar.bz2 -C $OHTOOLS_DIR \
+         && mv $OHTOOLS_DIR/clang-530132 $OHTOOLS_DIR/llvm \
+    && tar -xvf $OHBALLS_DIR/hc-gen-0.65-linux.tar -C $OHTOOLS_DIR \
+    && tar -xvf $OHBALLS_DIR/gcc_riscv32-linux-7.3.0.tar.gz -C $OHTOOLS_DIR \
+    && tar -xvf $OHBALLS_DIR/ninja.1.9.0.tar -C $OHTOOLS_DIR \
+    && tar -xvf $OHBALLS_DIR/gn-linux-x86-1717.tar.gz -C $OHTOOLS_DIR/gn \
+    && tar -xJf $OHBALLS_DIR/node-v14.15.4-linux-x64.tar.xz -C $OHTOOLS_DIR \
+    && cp $OHTOOLS_DIR/node-v14.15.4-linux-x64/bin/node /usr/local/bin \
+    && ln -s $OHTOOLS_DIR/node-v14.15.4-linux-x64/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -s $OHTOOLS_DIR/node-v14.15.4-linux-x64/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
+    && tar -xJf $OHBALLS_DIR/qemu-5.2.0.tar.xz -C $OHTOOLS_DIR \
+    && cd $OHTOOLS_DIR/qemu-5.2.0 \
+    && mkdir build \
+    && cd build \
+    && ../configure --target-list=arm-softmmu \
+    && make -j \
+    && make install \
+    && npm install -g @ohos/hpm-cli --registry  https://mirrors.huaweicloud.com/repository/npm/ \
+    && rm -rf $OHBALLS_DIR \
+    && rm -rf $OHTOOLS_DIR/qemu-5.2.0
+
+RUN sed -ri  -e '/^%sudo/s/ALL$/NOPASSWD:ALL/' \
+             -e "/^%sudo/a\\$DEFAULT_USER	ALL=(ALL:ALL) NOPASSWD:ALL" /etc/sudoers && \
+    groupadd -g 1027 $DEFAULT_USER && \
+    useradd -ms /bin/bash -u xxx -g xxx -p 'xxx' $DEFAULT_USER && \
+    usermod -aG sudo $DEFAULT_USER && \
+    ln -sf /usr/share/zoneinfo/$TZ /etc/localtime && \
+    echo "server xxx maxpoll 12" | tee -a /etc/ntp.conf
+
+USER $DEFAULT_USER
+WORKDIR /home/$DEFAULT_USER
+
+CMD ["bash"]

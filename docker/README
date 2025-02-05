@@ -1,0 +1,28 @@
+# Dockfile list
+# for CBE(common build environment)
+yocto-cbe.bj.df
+yocto-cbe.jf.df
+android-cbe.jf.df
+android-cbe-1804.df
+centos8.jf.df 
+
+# for CI
+ci-andr.bj.df
+ci.bj.df
+devops.bj.df
+devops-ci.bj.df
+
+
+# Docker cmds:
+#
+# docker build -t otcpkt.bj.intel.com/github-ci/ci-devops.bj:0.8 --build-arg http_proxy=http://child-prc.intel.com:913 --build-arg https_proxy=http://child-prc.intel.com:912 -f ../ci-devops.bj.df .
+# docker build -t cbe/centos8.jf:v0.2 --build-arg http_proxy=http://proxy-chain.intel.com:911/ --build-arg https_proxy=http://proxy-chain.intel.com:912 -f ../centos.df.2 .
+# docker run -it -d --name centos8-cbe  -w /home/jenkins -u jenkins -v /home/jenkins:/home/jenkins cbe/centos8.jf:v0.2  bash
+# docker exec -it <name> bash  
+How to publish a docker image
+$ docker tag <local image> <remote_image_repo>:<tag>
+$ docker push <remote_image_repo>:<tag>
+
+How to pull a docker image to local
+$ docker pull <remote_image_repo>:<tag>
+

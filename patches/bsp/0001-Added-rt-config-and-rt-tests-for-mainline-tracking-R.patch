@@ -1,0 +1,85 @@
+From f895af3982dabbdb972bb096349d62a2200c6726 Mon Sep 17 00:00:00 2001
+From: sys_oak <sys_oak@intel.com>
+Date: Thu, 31 Mar 2022 09:17:29 -0700
+Subject: [PATCH] Added rt config and rt-tests for mainline-tracking RT kernel
+
+Signed-off-by: Hao Li <hao3.li@intel.com>
+---
+ classes/extra-kernels/rt.bbclass              |  2 +-
+ .../linux/linux-config/bsp/x86/rt.cfg         | 32 +++++++------------
+ .../linux/linux-intel-iot-mlt-rt_git.bb       |  5 ++-
+ 3 files changed, 16 insertions(+), 23 deletions(-)
+
+diff --git a/classes/extra-kernels/rt.bbclass b/classes/extra-kernels/rt.bbclass
+index d634805..0457857 100644
+--- a/classes/extra-kernels/rt.bbclass
++++ b/classes/extra-kernels/rt.bbclass
+@@ -1 +1 @@
+-RT_KERNEL_COMMON_ARGS ?= "processor.max_cstate=0 intel.max_cstate=0 processor_idle.max_cstate=0 intel_idle.max_cstate=0 clocksource=tsc tsc=reliable nowatchdog intel_pstate=disable idle=poll noht isolcpus=2,3 rcu_nocbs=2,3 rcupdate.rcu_cpu_stall_suppress=1 rcu_nocb_poll irqaffinity=0 i915.enable_rc6=0 i915.enable_dc=0 i915.disable_power_well=0 mce=off hpet=disable numa_balancing=disable igb.blacklist=no efi=runtime art=virtallow iommu=pt nmi_watchdog=0 nosoftlockup hugepages=1024 rdt=!mba"
++RT_KERNEL_COMMON_ARGS ?= "processor.max_cstate=0 processor_idle.max_cstate=0 intel_idle.max_cstate=0 clocksource=tsc tsc=reliable nowatchdog nmi_watchdog=0 nosoftlockup intel_pstate=disable idle=poll nosmt isolcpus=1-3 rcu_nocbs=1-3 rcu_nocb_poll i915.enable_dc=0 i915.disable_power_well=0 i915.enable_rc6=0 irqaffinity=0 mce=off hpet=disable numa_balancing=disable cpufreq.off=1 efi=runtime art=virtallow iommu=pt rcupdate.rcu_cpu_stall_suppress=1"
+diff --git a/recipes-kernel/linux/linux-config/bsp/x86/rt.cfg b/recipes-kernel/linux/linux-config/bsp/x86/rt.cfg
+index 3bb791b..fe89ce0 100644
+--- a/recipes-kernel/linux/linux-config/bsp/x86/rt.cfg
++++ b/recipes-kernel/linux/linux-config/bsp/x86/rt.cfg
+@@ -1,27 +1,17 @@
+-CONFIG_GENERIC_IRQ_MIGRATION=y
+-CONFIG_NO_HZ_COMMON=y
+-CONFIG_HIGH_RES_TIMERS=y
+-
+-CONFIG_INTEL_RDT=y
+-CONFIG_NUMA=y
+-# CONFIG_NO_HZ is not set
+-# CONFIG_NO_HZ_IDLE is not set
+-CONFIG_NO_HZ_FULL=y
+-CONFIG_HZ_1000=y
++CONFIG_SMP=y
+ CONFIG_PREEMPT_RT=y
+ CONFIG_PREEMPT_RCU=y
++CONFIG_GENERIC_IRQ_MIGRATION=y
++CONFIG_EXPERT=y
++CONFIG_PCIE_PTM=y
++CONFIG_EFI=y
++CONFIG_HIGH_RES_TIMERS=y
+ CONFIG_RCU_NOCB_CPU=y
++CONFIG_HUGETLBFS=y
+ CONFIG_CPU_ISOLATION=y
+-CONFIG_CGROUP_NET_PRIO=y
+-CONFIG_RT_GROUP_SCHED=y
+-CONFIG_PROFILING=y
+-CONFIG_MODULE_FORCE_UNLOAD=y
+-CONFIG_RT_GROUP_SCHED=y
+-CONFIG_SMP=y
+ CONFIG_MIGRATION=y
+ CONFIG_PCIEPORTBUS=y
+-CONFIG_PCIE_PTM=y
+-CONFIG_HUGETLBFS=y
+-
+-# CONFIG_CPU_FREQ is not set
+-# CONFIG_SCHED_MC_PRIO is not set
++# CONFIG_NO_HZ_IDLE is not set
++CONFIG_NO_HZ_COMMON=y
++CONFIG_NO_HZ_FULL=y
++CONFIG_ARCH_SUPPORTS_RT=y
+diff --git a/recipes-kernel/linux/linux-intel-iot-mlt-rt_git.bb b/recipes-kernel/linux/linux-intel-iot-mlt-rt_git.bb
+index 32f6c79..807f239 100644
+--- a/recipes-kernel/linux/linux-intel-iot-mlt-rt_git.bb
++++ b/recipes-kernel/linux/linux-intel-iot-mlt-rt_git.bb
+@@ -2,7 +2,7 @@ require ./linux-intel-iot-mlt-rt.inc
+ require ./yocto-kernel-cache.inc
+ require ./linux-intel-ese.inc
+ 
+-LINUX_VERSION_EXTENSION = "-intel-iot-mlt-rt"
++# LINUX_VERSION_EXTENSION = "-intel-iot-mlt-rt"
+ KERNEL_PACKAGE_NAME = "${PN}-kernel"
+ 
+ # Optional kernel security harderning that may interfere with debugging
+@@ -10,3 +10,6 @@ SRC_URI:append = " ${@bb.utils.contains('DISTRO_FEATURES', 'hardened', 'file://b
+ SRC_URI:append = " file://bsp/${BSP_SUBTYPE}/ipmi.scc"
+ DEPENDS += "${@bb.utils.contains('DISTRO_FEATURES', 'hardened', 'openssl-native', '', d)}"
+ INHIBIT_PACKAGE_STRIP = "${@bb.utils.contains('DISTRO_FEATURES', 'hardened', '1', '0', d)}"
++
++SRC_URI:append = " file://bsp/${BSP_SUBTYPE}/rt.cfg"
++DEPENDS += "rt-tests glmark2 stress-ng"
+-- 
+2.25.1
+

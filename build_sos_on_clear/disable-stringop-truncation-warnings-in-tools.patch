@@ -1,0 +1,88 @@
+From a77f4f8bcfcebfa209c49e6f632d07acb4d0c671 Mon Sep 17 00:00:00 2001
+From: Michael Bottini <michael.a.bottini@intel.com>
+Date: Mon, 20 May 2019 13:43:28 -0700
+Subject: [PATCH] Disable stringop-truncation warnings in tools
+
+GCC 8.3 introduces a new error for "stringop-truncation."
+
+This obviously breaks the build, as it's being compiled with
+-Wall -Werror, so I'm going to disable this specific warning.
+---
+ devicemodel/Makefile         | 2 ++
+ tools/acrn-crashlog/Makefile | 3 +++
+ tools/acrn-manager/Makefile  | 4 ++++
+ tools/acrnlog/Makefile       | 1 +
+ tools/acrntrace/Makefile     | 3 +++
+ 5 files changed, 13 insertions(+)
+
+diff --git a/devicemodel/Makefile b/devicemodel/Makefile
+index ed08ec39..7580412e 100644
+--- a/devicemodel/Makefile
++++ b/devicemodel/Makefile
+@@ -20,6 +20,8 @@ CFLAGS += -Werror
+ CFLAGS += -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2
+ CFLAGS += -Wformat -Wformat-security -fno-strict-aliasing
+ CFLAGS += -fpie
++CFLAGS += -Wno-stringop-truncation
++CFLAGS += -Wno-address-of-packed-member
+ 
+ CFLAGS += -I$(BASEDIR)/include
+ CFLAGS += -I$(BASEDIR)/include/public
+diff --git a/tools/acrn-crashlog/Makefile b/tools/acrn-crashlog/Makefile
+index 05345088..bcadf132 100644
+--- a/tools/acrn-crashlog/Makefile
++++ b/tools/acrn-crashlog/Makefile
+@@ -22,6 +22,9 @@ CFLAGS += -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2
+ CFLAGS += -Wformat -Wformat-security -fno-strict-aliasing
+ CFLAGS += -fpie
+ CFLAGS += -Wall -Wextra -pedantic
++# Compiling this tool on GCC 8.3 throws a stringop-truncation error.
++# I DGAF about warnings here, so I'm going to disable this category of errors.
++CFLAGS += -Wno-stringop-truncation
+ 
+ CFLAGS += -I$(BASEDIR)/include
+ CFLAGS += -I$(BASEDIR)/include/public
+diff --git a/tools/acrn-manager/Makefile b/tools/acrn-manager/Makefile
+index 2e3b9d9b..d38a926f 100644
+--- a/tools/acrn-manager/Makefile
++++ b/tools/acrn-manager/Makefile
+@@ -11,6 +11,10 @@ MANAGER_CFLAGS += -Wall -ffunction-sections
+ MANAGER_CFLAGS += -Werror
+ MANAGER_CFLAGS += -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2
+ MANAGER_CFLAGS += -Wformat -Wformat-security -fno-strict-aliasing
++
++# Remove the stringop-truncation warning.
++MANAGER_CFLAGS += -Wno-stringop-truncation
++
+ MANAGER_CFLAGS += -fpie -fpic
+ #FIXME: remove me. work-around for system() calls, which will be removed
+ MANAGER_CFLAGS += -Wno-format-truncation -Wno-unused-result
+diff --git a/tools/acrnlog/Makefile b/tools/acrnlog/Makefile
+index 749c20c2..7585974f 100644
+--- a/tools/acrnlog/Makefile
++++ b/tools/acrnlog/Makefile
+@@ -8,6 +8,7 @@ LOG_CFLAGS += -DNO_OPENSSL
+ LOG_CFLAGS += -m64
+ LOG_CFLAGS += -Wall -ffunction-sections
+ LOG_CFLAGS += -Werror
++LOG_CFLAGS += -Wno-stringop-truncation
+ LOG_CFLAGS += -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2
+ LOG_CFLAGS += -Wformat -Wformat-security -fno-strict-aliasing
+ LOG_CFLAGS += -fpie -fpic
+diff --git a/tools/acrntrace/Makefile b/tools/acrntrace/Makefile
+index 22ff4f90..fabd7918 100644
+--- a/tools/acrntrace/Makefile
++++ b/tools/acrntrace/Makefile
+@@ -8,6 +8,9 @@ TRACE_CFLAGS += -DNO_OPENSSL
+ TRACE_CFLAGS += -m64
+ TRACE_CFLAGS += -Wall -ffunction-sections
+ TRACE_CFLAGS += -Werror
++
++# Remove stringop truncation warning, which fails the build on gcc 8.3
++TRACE_CFLAGS += -Wno-stringop-truncation
+ TRACE_CFLAGS += -O2 -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=2
+ TRACE_CFLAGS += -Wformat -Wformat-security -fno-strict-aliasing
+ TRACE_CFLAGS += -fpie -fpic
+-- 
+2.19.1
+

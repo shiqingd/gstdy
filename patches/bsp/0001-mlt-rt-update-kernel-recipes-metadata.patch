@@ -1,0 +1,30 @@
+From c759f9f0c61b70dd37709d3f50c4f28f9609a667 Mon Sep 17 00:00:00 2001
+From: sys_oak <sys_oak@intel.com>
+Date: Tue, 27 Aug 2024 01:16:58 -0700
+Subject: [PATCH] mlt-rt: update kernel recipes metadata
+
+Signed-off-by: sys_oak <sys_oak@intel.com>
+---
+ recipes-kernel/linux/linux-intel-iot-mlt-rt.inc | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/recipes-kernel/linux/linux-intel-iot-mlt-rt.inc b/recipes-kernel/linux/linux-intel-iot-mlt-rt.inc
+index 64c1a72..bfd1834 100644
+--- a/recipes-kernel/linux/linux-intel-iot-mlt-rt.inc
++++ b/recipes-kernel/linux/linux-intel-iot-mlt-rt.inc
+@@ -1,8 +1,9 @@
+ KERNEL_SRC_URI = "git://github.com/intel/mainline-tracking.git;protocol=https;branch=${KBRANCH};name=machine"
+ SRC_URI = "${KERNEL_SRC_URI}"
+-SRCREV_meta = "a73f39d9cf9469816fa9cba31bc8bbbc8e0617d8"
++KMETA_BRANCH = "master"
++SRCREV_meta = "8a662a6f8108526f562f2dc50b31a78495a1038e"
+ SRCREV_machine ?= "b874ec4e936997aa4d352d112023bbea277a047f"
+ LINUX_VERSION = "6.5.0"
+ LINUX_KERNEL_TYPE = "preempt-rt"
+ KBRANCH = "preempt-rt/v6.5-rt5"
+-LIC_FILES_CHKSUM = "file://COPYING;md5=6bc538ed5bd9a7fc9398086aedcd7e46"
+\ No newline at end of file
++LIC_FILES_CHKSUM = "file://COPYING;md5=6bc538ed5bd9a7fc9398086aedcd7e46"
+-- 
+2.25.1
+

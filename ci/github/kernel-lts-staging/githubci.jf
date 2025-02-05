@@ -1,0 +1,748 @@
+/*
+ * Jenkins file for Kernel LTS Staging Preintegration CI
+ */
+
+/*
+ * Global constaint
+ */
+NODE_LABEL = "githubci"
+UPLOAD_NODE_LABEL = "githubci_upload"
+/* timeout in minute */
+JOB_TIMEOUT = 120
+CLONE_TIMEOUT = 30
+DOCKER_IMG = "otcpkt.bj.intel.com/github-ci/ci.__SITE__:0.9"
+ANDR_DOCKER_IMG = "otcpkt.bj.intel.com/github-ci/ci-andr.__SITE__:0.8"
+DEVOPS_DOCKER_IMG = "otcpkt.bj.intel.com/github-ci/ci-devops.__SITE__:0.5"
+DOCKER_USR = "jenkins"
+DOCKER_OPT = "-v /home/${DOCKER_USR}:/home/${DOCKER_USR}"
+BASE_DIR = "/ci"
+JOBS_DIR = "${BASE_DIR}/jobs"
+DEVOPS_REPO_DIR = "${BASE_DIR}/devops"
+CI_BASEDIR = "${DEVOPS_REPO_DIR}/ci/github"
+CI_SCRIPTS_DIR = "${CI_BASEDIR}/kernel-lts-staging/scripts"
+CI_COMMON_SCRIPTS_DIR = "${CI_BASEDIR}/scripts"
+KCFG_REPO_DIR = "${BASE_DIR}/kernel-config"
+
+DEVOPS_DB_HOST = "oak-pkpt.ostc.intel.com"
+DEVOPS_DB_PORT = "5432"
+/* local port that mapping to devops db port */
+LOC_DEVOPS_DB_PORT = "3339"
+DB_USR = "postgres"
+DB_USR_KEY = "~/.ssh/postgres_rsa"
+GITHUB_LOGIN = "sys-oak"
+
+JOB_RST_PASS = "SUCCESS"
+JOB_RST_FAIL = "FAILURE"
+
+/* job related */
+CPUS_PER_JOB = 16
+MAKE_OPT = [
+    'x86_64': "ARCH=x86_64",
+    'arm64': "ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu-",
+    'clang': "ARCH=x86_64 CC=clang HOSTCC=clang",
+]
+
+/* android info mapping */
+ANDR_INFO_MAP = [
+    'default': [
+        'cfg_files': [
+            'bxt/android/non-embargoed/x86_64_defconfig',
+            'bxt/android/non-embargoed/abl_diffconfig',
+            'bxt/android/non-embargoed/car_diffconfig',
+            'bxt/android/non-embargoed/cbc_diffconfig',
+            'bxt/android/non-embargoed/debug_diffconfig',
+        ],
+        'clang_ver': 12,
+    ],
+    '4.19/android': [
+        'cfg_branch': '4.19/config',
+    ],
+    '4.19/android_q': [
+        'cfg_branch': '4.19/config_q',
+    ],
+    '4.19/android_r': [
+        'cfg_branch': '4.19/config_r',
+    ],
+    '4.19/android_s': [
+        'cfg_branch': '4.19/config_s',
+    ],
+    '4.19/android_t': [
+        'cfg_branch': '4.19/config_t',
+        'clang_ver': 14,
+    ],
+    '5.10/android_civ': [
+        'cfg_branch': '5.10/civ_guest',
+        'cfg_files': [
+            'x86_64_defconfig',
+        ],
+    ],
+    '5.10/android-civ': [
+        'cfg_branch': '5.10/civ_guest',
+        'cfg_files': [
+            'x86_64_defconfig',
+        ],
+    ],
+]
+
+/* sample: <hostname prefix>: <site>:<docker suffix> */
+NODE_SITE_MAP = [
+    'mhw': 'bj:bj',
+    'oak': 'jf:jf',
+    'iotgkit': 'hf:jf',
+]
+
+
+/*
+ * Global variables
+ */
+/* dynamically generate the parallel stages */
+parallel_jobs = [:]
+job_results = [:]
+
+
+/*
+ * Functions
+ */
+def _get_site_by_node(node_name) {
+    // default is 'bj' site
+    def site = 'bj'
+    for (e in NODE_SITE_MAP) {
+        if (node_name.startsWith(e.key)) {
+            site = e.value
+            break
+        }
+    }
+    return site
+}
+
+
+/* get physical site by node name */
+def get_site_by_node(node_name) {
+    return _get_site_by_node(node_name).split(':')[0]
+}
+
+
+/* get docker image suffix by node name */
+def get_dis_by_node(node_name) {
+    return _get_site_by_node(node_name).split(':')[1]
+}
+
+
+/* get docker image name by site to support
+   running docker on nodes crossing sites in
+   the stage that generated dynamically      */
+def get_din_by_node(img, node_name) {
+    return img.replace('__SITE__', get_dis_by_node(node_name))
+}
+
+
+def mysh(cmd, debug=false, env_fl=null) {
+    def debug_opt = debug ? "set -x" : ""
+    cmd = """#!/bin/bash -e
+    test -n "$env_fl" -a -f $env_fl && source $env_fl
+    echo "PWD: ${pwd}"
+    ${debug_opt}
+    ${cmd}
+"""
+    sh(cmd)
+}
+
+
+/*
+ * git-clean the current folder
+ */
+def clean() {
+    sh "git clean -ffdx && git reset --hard HEAD || exit 0"
+}
+
+
+/*
+ * git-clone/checkout repository
+ *   parameters:
+ *     url: repo. url
+ *     ref: branch, tag or commit ID
+ *     credential: login user/password defined in jenkins
+ */
+def checkout(url, ref, is_shallow=false, credential='') {
+    clean()
+    try {
+        checkout([
+            $class: 'GitSCM',
+            branches: [[name: ref]],
+            doGenerateSubmoduleConfigurations: false,
+            extensions: [
+                [$class: 'CleanCheckout'],
+                [
+                    $class: 'CloneOption',
+                    shallow: is_shallow,
+                    timeout: CLONE_TIMEOUT
+                ]
+            ],
+            submoduleCfg: [],
+            userRemoteConfigs: [[credentialsId: credential, url: url]]
+        ])
+    } catch (err) {
+        print(err)
+        mysh("""
+          git fetch --tags --force
+          git checkout --force ${ref}
+        """, true)
+    }
+}
+
+
+def prechk(args) {
+    mysh("""
+      echo ""
+      echo "====== Context information ======"
+      echo "Workspace: ${WORKSPACE}"
+      echo "Event name: ${args.github_event_name}"
+      echo "Event action: ${args.github_event_action}"
+      echo "Github URL: ${args.github_url}"
+      echo "Previous revision: ${args.github_before}"
+      echo "Current branch: ${args.github_ref}"
+      echo "Current revision: ${args.github_sha}"
+      echo "Pull request source branch: ${args.github_head_ref}"
+      echo "Pull request target branch: ${args.github_base_ref}"
+      echo "Pull source sha: ${args.github_head_sha}"
+      echo "Pull target sha: ${args.github_base_sha}"
+      echo ""
+      echo "====== Tools information ======"
+      git --version
+      gcc -v
+      which clang && clang --version
+      exit 0
+    """)
+}
+
+
+/*
+ * setup env vars for accessing devops db:
+ *   for jf site:
+ *     1. just set host and port
+ *   for other sites:
+ *     1. establish ssh tunnel to db server
+ *     2. set host and port
+ */
+def set_devopsdb_env () {
+    def site = get_site_by_node(NODE_NAME)
+    def db_host = null
+    def db_port = null
+    if (site == 'jf') {
+        db_host = DEVOPS_DB_HOST
+        db_port = DEVOPS_DB_PORT
+    } else {
+        mysh("""
+          ssh -f -N \
+              -i ${DB_USR_KEY} \
+              -L ${LOC_DEVOPS_DB_PORT}:${DEVOPS_DB_HOST}:${DEVOPS_DB_PORT} \
+                ${DB_USR}@${DEVOPS_DB_HOST}
+        """)
+        db_host = "localhost"
+        db_port = LOC_DEVOPS_DB_PORT
+    }
+    env.DATABASE_HOST = db_host
+    env.DATABASE_PORT = db_port
+}
+
+
+def bannedwordscan(args) {
+    /* clone/fetch the code */
+    checkout(args.github_url, args.github_base_ref)
+
+    /* main */
+    def out = "${WORKSPACE}/bannedword.git.out"
+    def log = "${WORKSPACE}/bannedword.log"
+    mysh("""
+      echo "Fetch the latest CI scripts"
+      cd ${DEVOPS_REPO_DIR}
+      git pull || :
+      git status
+
+      cd ${WORKSPACE}
+      make mrproper
+      if [ "${args.github_event_name}" == "pull_request" ]; then
+          range=origin/${args.github_base_ref}..origin/${args.github_head_ref}
+      else
+          range=${args.github_before}..${args.github_sha}
+      fi
+      git log \$range | tee ${out}
+      python3 ${CI_SCRIPTS_DIR}/banned_word_scan.py ${out} 2>&1 | tee ${log}
+      exit \${PIPESTATUS[0]}
+    """)
+}
+
+
+def checkpatch(args) {
+    /* clone/fetch the code */
+    checkout(args.github_url, args.github_base_ref)
+
+    /* main */
+    def pl_log = "${WORKSPACE}/checkpatch.pl.log"
+    def py_log = "${WORKSPACE}/checkpatch.py.log"
+    mysh("""
+      echo "Fetch the latest CI scripts"
+      cd ${DEVOPS_REPO_DIR}
+      git pull || :
+      git status
+
+      cd ${WORKSPACE}
+      make mrproper
+      if [ "${args.github_event_name}" == "pull_request" ]; then
+          range=origin/${args.github_base_ref}..origin/${args.github_head_ref}
+      else
+          range=${args.github_before}..${args.github_sha}
+      fi
+      git format-patch \$range
+      ./scripts/checkpatch.pl \
+          --ignore gerrit_change_id --no-signoff *.patch 2>&1 | \
+            tee ${pl_log} || echo "Done!"
+      python3 ${CI_SCRIPTS_DIR}/checkpatch_parser.py ${pl_log} 2>&1 | \
+          tee ${py_log}
+      exit \${PIPESTATUS[0]}
+    """)
+}
+
+
+/*
+ *  arguments:
+ *    args: arguments from parameter block
+ *    mode: ['yes', 'no', 'mod']
+ *    type: ['x86_64', 'arm64', 'clang']
+ */
+def compile_allconfig(args, mode, type='x86_64') {
+    /* clone/fetch the code */
+    checkout(args.github_url, args.github_head_ref)
+
+    /* main */
+    def make_log = "${WORKSPACE}/make_all${mode}_${type}.log"
+    def mkcfg_log = "${WORKSPACE}/mkcfg_all${mode}_${type}.log"
+    mysh("""
+      make mrproper
+      make ${MAKE_OPT[type]} all${mode}config 2>&1 | tee ${mkcfg_log}
+      make ${MAKE_OPT[type]} -j${CPUS_PER_JOB} 2>&1 | tee ${make_log}
+      exit \${PIPESTATUS[0]}
+    """)
+}
+
+
+/*
+ *  arguments:
+ *    args: arguments from parameter block
+ *    type: ['x86_64', 'arm64', 'clang']
+ */
+def compile_androidconfig(args, type='x86_64') {
+    /* clone/fetch the code */
+    checkout(args.github_url, args.github_head_ref)
+
+    /* main */
+    def make_log = "${WORKSPACE}/make_android-${type}.log"
+    def mkcfg_log = "${WORKSPACE}/mkcfg_android-${type}.log"
+    def kinfo_map = null
+    if (ANDR_INFO_MAP.containsKey(args.github_base_ref)) {
+        kinfo_map = ANDR_INFO_MAP[args.github_base_ref]
+    } else {
+        for (it in ANDR_INFO_MAP) {
+            if (args.github_base_ref.startsWith("${it.key}/")) {
+                kinfo_map = it.value
+                break
+            }
+        }
+    }
+    def kcfg_brch = kinfo_map['cfg_branch']
+    def kcfg_list = kinfo_map.containsKey('cfg_files') ? \
+                      kinfo_map['cfg_files'] : \
+                      ANDR_INFO_MAP['default']['cfg_files']
+    def clang_ver = kinfo_map.containsKey('clang_ver') ? \
+                      kinfo_map['clang_ver'] : \
+                      ANDR_INFO_MAP['default']['clang_ver']
+    // the list of kcfg absolute path
+    def ap_kcfg_list = []
+    kcfg_list.each {
+        ap_kcfg_list.add("${KCFG_REPO_DIR}/${it}")
+    }
+    def kcfg_files = ap_kcfg_list.join(' ')
+    mysh("""
+      cd ${KCFG_REPO_DIR}
+      git fetch || { git prune; git remote prune origin; git fetch; }
+      git checkout ${kcfg_brch}
+      echo "Android config ready"
+
+      if [ "${type}" == "clang" ]; then
+          sudo update-alternatives \
+                 --quiet --set clang /usr/bin/clang-${clang_ver}
+          sudo update-alternatives \
+                 --quiet --set llvm-config /usr/bin/llvm-config-${clang_ver}
+      fi
+
+      cd ${WORKSPACE}
+      make mrproper
+      ./scripts/kconfig/merge_config.sh $kcfg_files 2>&1 | \
+          tee ${mkcfg_log}
+      make ${MAKE_OPT[type]} -j${CPUS_PER_JOB} 2>&1 | tee ${make_log}
+      exit \${PIPESTATUS[0]}
+    """)
+}
+
+
+def scan2quilt(args) {
+    // set env for accessing devops db
+    set_devopsdb_env()
+    // export some parameters as env vars those
+    // would be used by the test job
+    env.github_head_ref = args.github_head_ref
+    env.github_base_ref = args.github_base_ref
+    env.github_labels = args.github_labels
+
+    /* main */
+    def log = "${WORKSPACE}/scan2quilt.log"
+    mysh("""
+      cd ${DEVOPS_REPO_DIR}
+      git fetch || { git prune; git remote prune origin; git fetch; }
+      git checkout origin/sandbox/yifan/quilt1210
+      source envs_for_testing.sh
+      python3 testAndUpdateQuilt.py 2>&1 | tee ${log}
+      exit \${PIPESTATUS[0]}
+    """)
+}
+
+
+def post_merge_quilt_deploy(args) {
+    // set env for accessing devops db
+    set_devopsdb_env()
+    // export some parameters as env vars those
+    // would be used by the test job
+    env.github_head_ref = args.github_head_ref
+    env.github_base_ref = args.github_base_ref
+    env.github_labels = args.github_labels
+
+    /* main */
+    def log = "${WORKSPACE}/quiltdeploy.log"
+    mysh("""
+      cd ${DEVOPS_REPO_DIR}
+      git fetch || { git prune; git remote prune origin; git fetch; }
+      git checkout origin/sandbox/yifan/quilt1210
+      source envs_for_testing.sh
+      python3 testAndUpdateQuilt-post-MR-GH.py 2>&1 | tee ${log}
+      exit \${PIPESTATUS[0]}
+    """)
+}
+
+
+/* generate a single stage of CI job */
+def generate_stage(job) {
+    // return CpsClosure2 object
+    // the variables in closure will not be substituted until it's called
+    return {
+        stage(job.name) {
+          node(NODE_LABEL) {
+            withDockerContainer(
+                args: DOCKER_OPT,
+                image: get_din_by_node(job.docker_img, NODE_NAME)) {
+              try {
+                /* run the job */
+                job.run.call()
+                /* set job result: pass */
+                job_results[job.name] = JOB_RST_PASS
+              } catch (err) {
+                print(err)
+                /* set job result as fail */
+                job_results[job.name] = JOB_RST_FAIL
+                /* set the stage result as fail */
+                false
+              }
+              /* artifact */
+              archiveArtifacts artifacts: "*.log", allowEmptyArchive: true
+            }
+          }
+        } // end of stage
+    }
+}
+
+
+/* dynamically generate stages for CI jobs */
+def generate_stages(args) {
+    /*
+     * define the CI jobs here
+     */
+    def jobs = [
+        [
+            "name": "bannedwordscan",
+            "docker_img": DOCKER_IMG,
+            "run": { ->
+                bannedwordscan(args)
+            },
+        ],
+        [
+            "name": "checkpatch",
+            "docker_img": DOCKER_IMG,
+            "run": { ->
+                checkpatch(args)
+            },
+        ],
+        [
+            "name": "compile_allyesconfig",
+            "docker_img": DOCKER_IMG,
+            "run": { ->
+                compile_allconfig(args, 'yes')
+            },
+        ],
+        [
+            "name": "compile_allmodconfig",
+            "docker_img": DOCKER_IMG,
+            "run": { ->
+                compile_allconfig(args, 'mod')
+            },
+        ],
+        [
+            "name": "compile_allnoconfig",
+            "docker_img": DOCKER_IMG,
+            "run": { ->
+                compile_allconfig(args, 'no')
+            },
+        ],
+        [
+            "name": "compile_allyesconfig_arm64",
+            "docker_img": DOCKER_IMG,
+            "run": { ->
+                compile_allconfig(args, 'yes', 'arm64')
+            },
+        ],
+        [
+            "name": "compile_allmodconfig_arm64",
+            "docker_img": DOCKER_IMG,
+            "run": { ->
+                compile_allconfig(args, 'mod', 'arm64')
+            },
+        ],
+        [
+            "name": "compile_allnoconfig_arm64",
+            "docker_img": DOCKER_IMG,
+            "run": { ->
+                compile_allconfig(args, 'no', 'arm64')
+            },
+        ],
+        [
+            "name": "compile_androidconfig",
+            "docker_img": ANDR_DOCKER_IMG,
+            "run": { ->
+                compile_androidconfig(args)
+            },
+        ],
+        [
+            "name": "compile_androidconfig_clang",
+            "docker_img": ANDR_DOCKER_IMG,
+            "run": { ->
+                compile_androidconfig(args, 'clang')
+            },
+        ],
+        [
+            "name": "scan2quilt",
+            "docker_img": DEVOPS_DOCKER_IMG,
+            "run": { ->
+                scan2quilt(args)
+            },
+        ],
+        [
+            "name": "post_merge_quilt_deploy",
+            "docker_img": DEVOPS_DOCKER_IMG,
+            "run": { ->
+                post_merge_quilt_deploy(args)
+            },
+        ],
+    ]
+
+    /*
+     * due to this bug caused by collectEntries:
+     *   "MissingPropertyException: No such property: Entry for class: java.util.Map"
+     * each {} is used instead of collectEntries {}
+     */
+    //parallel_jobs_map = jobs.collectEntries {
+    //    if (it.branch_matched) {
+    //        ["${it.name}" : generate_stage(it)]
+    //    }
+    //}
+    def testplan = args.ci_testplan.split(',')
+    jobs.each {
+        if (it.name in testplan) {
+            parallel_jobs.put(it.name, generate_stage(it))
+        }
+    }
+}
+
+
+/*
+ * arguments:
+ *   repo_path: Github repo path owner/project
+ *   event_name: [pull_request, push]
+ *   id: event id, e.g. pull_request number
+ *   type: [ci_start, ci_end]
+ *   comment_id: update the comment instead of
+ *       creating a new one if it's specified
+ */
+def update_github(repo_path, event_name, id, type, comment_id=null) {
+    // do nothing if parallel_jobs is empty
+    if (parallel_jobs.size() == 0) {
+        return
+    }
+
+    // write comments
+    def ext_opt = "-a ${type}"
+    def comment = null
+    switch(type) {
+        case "ci_start":
+            def planned_jobs = parallel_jobs.keySet() as String[]
+            comment = """
+Autocheck started at: $BUILD_URL
+
+Planned test(s):
+<ul>
+  <li>${planned_jobs.sort().join('</li>\n  <li>')}</li>
+</ul>
+
+"""
+            break
+
+        case "ci_end":
+            final_result = JOB_RST_PASS
+            for (r in job_results) {
+                if (r.value != JOB_RST_PASS) {
+                    final_result = JOB_RST_FAIL
+                    break
+                }
+            }
+            // set jenkins job result
+            currentBuild.result = final_result
+            ext_opt += " -r $final_result"
+            def results = job_results.collect {
+                "${it.key}: ${it.value}"
+            }
+            comment = """
+Autocheck completed.
+
+Test result(s):
+<ul>
+  <li>${results.sort().join('</li>\n  <li>')}</li>
+</ul>
+
+"""
+            break
+
+        default:
+            break
+    }
+
+    if (comment_id) {
+        ext_opt += " -c $comment_id"
+    }
+    env.GITHUB_LOGIN = GITHUB_LOGIN
+    mysh("""
+      echo "Fetch the latest CI scripts"
+      cd ${DEVOPS_REPO_DIR}
+      git pull || :
+      git status
+
+      python3 ${CI_COMMON_SCRIPTS_DIR}/update_github.py \
+          -p $repo_path \
+          -e $event_name \
+          -n $id \
+          $ext_opt \
+          "$comment"
+    """, true)
+}
+
+
+/*
+ * Main workflow
+ */
+pipeline {
+  agent none
+
+  options {
+      // this pipeline can only run one instance at a time
+      //disableConcurrentBuilds()
+      timestamps ()
+      timeout(time: JOB_TIMEOUT, unit: 'MINUTES')
+  }
+
+  /* note: the variables defined here are all String class
+     define other types of data in "Global variables" section */
+  //environment {}
+  /*
+   * Parameters of main job
+   */
+
+  parameters {
+      string(name: 'github_event_name', description: 'From Github context: github.event_name', defaultValue: '')
+      string(name: 'github_repo_fullname', description: 'From Github Webhook: repo.full_name', defaultValue: '')
+      string(name: 'github_event_action', description: 'From Github context: github.event_action', defaultValue: '')
+      string(name: 'github_event_number', description: 'From Github context: github.event.pull_request.number', defaultValue: '')
+      string(name: 'github_prid', description: 'From Github context: github.event.pull_request.id', defaultValue: '')
+      string(name: 'github_url', description: 'From Github Webhook: repo.html_url', defaultValue: '')
+      string(name: 'github_before', description: 'From Github context: github.event_before', defaultValue: '')
+      string(name: 'github_ref', description: 'From Github context: github.ref', defaultValue: '')
+      string(name: 'github_sha', description: 'From Github context: github.sha', defaultValue: '')
+      string(name: 'github_head_ref', description: 'From Github context: github.head_ref', defaultValue: '')
+      string(name: 'github_base_ref', description: 'From Github context: github.base_ref', defaultValue: '')
+      string(name: 'github_head_sha', description: 'From Github context: github.event.pull_request.head_sha', defaultValue: '')
+      string(name: 'github_base_sha', description: 'From Github context: github.event.pull_request.base_sha', defaultValue: '')
+      string(name: 'github_labels', description: 'From Github Webhook: github.pull_request.labels', defaultValue: '')
+      string(name: 'ci_testplan', description: 'The list of test cases, separated by comma', defaultValue: '')
+  }
+
+  /*
+   * Stages(main workflow)
+   */
+  stages {
+    stage('S0: Precheck') {
+      steps {
+        node(NODE_LABEL) {
+          withDockerContainer(
+              args: DOCKER_OPT,
+              image: get_din_by_node(DOCKER_IMG, NODE_NAME)) {
+            prechk(params)
+            generate_stages(params)
+            update_github(params.github_repo_fullname,
+                          params.github_event_name,
+                          params.github_event_number,
+                          'ci_start')
+          }
+        }
+      }
+    } // end of stage 0
+    stage('S1: Trigger Builds/Tests') {
+      steps {
+        script {
+          parallel parallel_jobs
+        }
+      }
+    } // end of stage 1
+    stage('S2: Post result') {
+      when {
+        expression {
+          parallel_jobs.size()
+        }
+      }
+      steps {
+        node(UPLOAD_NODE_LABEL) {
+          withDockerContainer(
+              args: DOCKER_OPT,
+              image: get_din_by_node(DOCKER_IMG, NODE_NAME)) {
+            update_github(params.github_repo_fullname,
+                          params.github_event_name,
+                          params.github_event_number,
+                          'ci_end')
+          }
+        }
+      }
+    } // end of stage 2
+  } // end of stages
+
+  /*
+   * Post actions: post test result in Github
+   */
+  //post {
+  //  always {
+  //  }
+  //}
+} // end of pipeline

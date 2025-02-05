@@ -1,0 +1,76 @@
+FROM ubuntu:20.04
+
+ENV DEFAULT_USER=jenkins \
+    TZ=Asia/Shanghai \
+    LANG=en_US.utf8 \
+    HTTP_PROXY=http://child-prc.intel.com:913 \
+    HTTPS_PROXY=http://child-prc.intel.com:912 \
+    SOCKS_PROXY=socks://child-prc.intel.com:1080 \
+    FTP_PROXY=http://child-prc.intel.com:913 \
+    ALL_PROXY=http://child-prc.intel.com:913 \
+    NO_PROXY="intel.com,.intel.com,10.0.0.0/8,192.168.0.0/16,localhost,127.0.0.0/8,134.134.0.0/16" \
+    http_proxy=http://child-prc.intel.com:913 \
+    https_proxy=http://child-prc.intel.com:912 \
+    socks_proxy=socks://child-prc.intel.com:1080 \
+    ftp_proxy=http://child-prc.intel.com:913 \
+    all_proxy=http://child-prc.intel.com:913 \
+    no_proxy="intel.com,.intel.com,10.0.0.0/8,192.168.0.0/16,localhost,127.0.0.0/8,134.134.0.0/16" \
+    PATH=/home/jenkins/bin:/home/jenkins/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+COPY ./ci.tgz /tmp/ci.tgz
+
+RUN apt-get update && \
+    env DEBIAN_FRONTEND=noninteractive \
+      apt-get install -yq \
+        sudo build-essential git python3 bash gawk chrpath \
+        wget cpio texinfo lzop apt-utils bc screen libncurses5-dev locales \
+        libc6-dev-i386 patchutils ssh-client vim nano gawk wget git-core \
+        diffstat unzip texinfo socat libsdl1.2-dev xterm make xsltproc \
+        docbook-utils dblatex xmlto libglib2.0-dev xutils-dev m4 flex bison \
+        strace nfs-common libssl-dev libgmp-dev libmpfr-dev libmpc-dev \
+        pax-utils paxctl libiberty-dev binutils-dev openssl curl ocaml-nox \
+        elfutils libelf-dev zstd icecc openjdk-8-jre-headless \
+        openjdk-11-jdk-headless python-mako gettext liblz4-tool \
+        policycoreutils checkpolicy git-lfs kmod mtools squashfs-tools parted \
+        rpm2cpio cmake ninja-build gperf python3-ply python3-pip \
+        python3-setuptools python3-wheel xz-utils file gcc-multilib autoconf \
+        automake libtool gdb clang-8 llvm-8 ncurses-base ncurses-term \
+        libncurses-dev pv rpm ntp software-properties-common connect-proxy \
+        openssh-server rsync python3-sh python-is-python3 python3-dev libsasl2-dev \
+        libldap2-dev libssl-dev python3-pexpect quilt
+
+RUN add-apt-repository ppa:ubuntu-toolchain-r/test
+
+RUN apt-get update && \
+    env DEBIAN_FRONTEND=noninteractive \
+      apt-get install -yq python3-pandas python3-networkx postgresql-client \
+        sshfs iproute2
+
+RUN pip3 install django==2.2 django-auth-ldap django-extensions django-filter \
+      django-graphos django-inplaceedit django-jsonfield django-mathfilters \
+      django-xmlrpc djangorestframework django-simple-history \
+      psycopg2-binary==2.8.6 GitPython PyGithub kconfiglib pymongo
+
+RUN echo "\
+Acquire::http::proxy \"${HTTP_PROXY}/\";\n\
+Acquire::https::proxy \"${HTTPS_PROXY}/\";\n\
+Acquire::ftp::proxy \"${FTP_PROXY}/\";\n\
+Acquire::socks::proxy \"${SOCKS_PROXY}/\";" | tee /etc/apt/apt.conf && \
+    sed -ri  '/^%sudo/s/ALL$/NOPASSWD:ALL/' /etc/sudoers && \
+    groupadd -g 1027 $DEFAULT_USER && \
+    useradd -ms /bin/bash -u 1027 -g 1027 -p '$1$cnGKG4s9$UUD1b5cHVG5vUu8FLKwqn0' $DEFAULT_USER && \
+    usermod -aG sudo $DEFAULT_USER && \
+    dpkg-reconfigure locales && \
+    echo "en_US.UTF-8 UTF-8" | tee -a /etc/locale.gen && \
+    locale-gen && \
+    ln -sf /usr/share/zoneinfo/$TZ /etc/localtime && \
+    echo "server corp.intel.com maxpoll 12" | tee -a /etc/ntp.conf && \
+    tar -C / -zxf /tmp/ci.tgz && \
+    rm /tmp/ci.tgz && \
+    mkdir /ci/jobs && \
+    chown -R $DEFAULT_USER:$DEFAULT_USER /ci
+
+USER $DEFAULT_USER
+WORKDIR /home/$DEFAULT_USER
+
+CMD ["bash"]
