@@ -825,7 +825,11 @@ class JenkinsJob(models.Model):
 		return '{} --> {} {}'.format(self.host.name, self.kernel.name, self.jobname)
 
 	def url(self):
-		return "%s/job/%s" % (self.host.url, self.jobname)
+		if '/' in self.jobname:
+			folder , job = self.jobname.split('/')
+			return f"{self.host.url}/job/{folder}/job/{job}"
+		else:
+			return f"{self.host.url}/job/{self.jobname}"
 
 	def __repr__(self):
 		return self.__str__()

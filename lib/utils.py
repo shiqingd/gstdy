@@ -155,7 +155,7 @@ def checkout(source, target):
 		except Exception:
 			die(strip_extra_newlines(str(e)))
 	try:
-		traceable_method(_git, "reset", "--hard")
+		_git.reset("--hard").wait()
 	except Exception as e:
 		die(strip_extra_newlines(str(e)))
 

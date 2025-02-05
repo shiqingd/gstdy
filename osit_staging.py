@@ -6,6 +6,7 @@ import re
 import logging
 import shutil
 import json
+import inspect
 from pathlib import Path
 if not "DJANGO_SETTINGS_MODULE" in os.environ:
 	os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings.settings")
@@ -18,8 +19,10 @@ from framework.models import *
 
 from lib.download import HttpDownloader
 from lib.jenkins import (
-    get_artifact_list,
-    get_lastpassed_build_number
+    JenkinsArtifactFinder,
+#    get_artifact_list,
+    get_lastpassed_build_number,
+    form_job_url
 )
 from lib.pushd import pushd
 from lib.utils import (
@@ -34,6 +37,8 @@ from lib.dry_run import traceable_method
 
 logger = logging.getLogger(__name__)
 
+def print_with_line_number(message):
+    print(f'Line {inspect.currentframe().f_back.f_lineno}: {message}')
 
 class KernelBuild:
     def __init__(self, **kwargs):
@@ -197,42 +202,44 @@ class YoctoArtifacts():
     def __init__(self, kernel, workspace, build_number=None):
         self.kernel = kernel
         self.yoctojob = JenkinsJob.objects.get(
-          host__name='OTC PKT', kernel=kernel, jobname__icontains='ltpddt')
+          host__name='CJE', kernel=kernel, jobname__icontains='ltpddt')
         if build_number:
             try:
-                artifacts = get_artifact_list(
-                  self.yoctojob.host.url, self.yoctojob.jobname, build_number)
+                self.finder = JenkinsArtifactFinder()
+                self.finder.get_artifact_list(self.yoctojob.host.url, self.yoctojob.jobname, build_number)
+                artifacts = self.finder.artifacts
                 self.build_number = build_number
             except requests.RequestException as e:
                 self.build_number = 'lastSuccessfulBuild'
         else:
             self.build_number = 'lastSuccessfulBuild'
         if self.build_number == 'lastSuccessfulBuild':
-            self.build_number = get_lastpassed_build_number(
-              self.yoctojob.host.url, self.yoctojob.jobname)
-            artifacts = get_artifact_list(
-              self.yoctojob.host.url, self.yoctojob.jobname, self.build_number)
+            self.build_number = get_lastpassed_build_number(self.yoctojob.host.url, self.yoctojob.jobname)
+            self.finder = JenkinsArtifactFinder()
+            self.finder.get_artifact_list(self.yoctojob.host.url, self.yoctojob.jobname, self.build_number)
+            artifacts = self.finder.artifacts
+
+
         self.build_number = str(self.build_number)
-        self.artifact_dir = os.path.join(
-          workspace, 'artifacts', self.build_number)
-        self.artifact_url = '/'.join((
-          self.yoctojob.url(), self.build_number, 'artifact'))
+        self.artifact_dir = os.path.join( workspace, 'artifacts', self.build_number)
+        self.artifact_url = self.finder.source_url
 
         self.artifacts = {}
         self.local_artifacts = {}
         for a in artifacts:
             if re.search(r'config-', a):
-                self.artifacts['config'] = "%s/%s" % (self.artifact_url, a)
+                self.artifacts['config'] = f"{self.artifact_url}/{a}"
                 self.local_artifacts['config'] = os.path.join(
                   self.artifact_dir, a.split('/')[-1])
-            elif re.search(r'initramfs', a):
-                self.artifacts['initramfs'] = "%s/%s" % (self.artifact_url, a)
+            elif re.search(r'initramfs-.+-[0-9]{6}[0-9]{6}', a):
+                self.artifacts['initramfs'] = f"{self.artifact_url}/{a}"
                 self.local_artifacts['initramfs'] = os.path.join(
                   self.artifact_dir, a.split('/')[-1])
             elif re.search(r'intel-corei7-64.wic', a):
-                self.artifacts['osimage_url'] = "%s/%s" % (self.artifact_url, a)
-        self.local_artifacts['done'] = os.path.join(
-          self.artifact_dir, '.done')
+                self.artifacts['osimage_url'] = f"{self.artifact_url}/{a}"
+        self.local_artifacts['done'] = os.path.join(self.artifact_dir, '.done')
+        print(json.dumps(self.artifacts, indent=4))
+        print(json.dumps(self.local_artifacts, indent=4))
 
 
     def check_exist(self):
@@ -247,8 +254,13 @@ class YoctoArtifacts():
     def download_artifacts(self):
         shutil.rmtree(self.artifact_dir, ignore_errors=True)
         os.makedirs(self.artifact_dir)
-        downloader = HttpDownloader()
+        if 'artifactory' in self.finder.source_url:
+            downloader = HttpDownloader(headers = { "Accept" : "application/json" , "X-JFrog-Art-Api" : os.environ["SYS_OAK_CRED_ARTIFACTORY_API"]})
+        else:
+            downloader = HttpDownloader(auth = ('sys_oak', os.environ['SYS_OAK_CRED_JENKINS_API']))
         for f in ('config', 'initramfs',):
+            print(f"REMOTE {self.artifacts[f]}")
+            print(f"LOCAL {self.local_artifacts[f]}")
             downloader.download(self.artifacts[f], self.local_artifacts[f])
         Path(self.local_artifacts['done']).touch()
 

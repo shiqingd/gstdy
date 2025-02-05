@@ -277,10 +277,8 @@ def __generate_quilt_patchset(kernel, releases):
 				seriesfile.write(f)
 				seriesfile.write("\n")
 	with pushd(os.path.join(os.environ["WORKSPACE"],Quilt_Project)):
-		if files:	# Do a 'git add' only if there are patches to add
-			__dryrunnable_git("add", "patches/series")
-			__dryrunnable_git("add", "patches/*.{}".format(_datetime_string))
-			__dryrunnable_git("commit", "-sm", "Kernel update {}".format(_datetime_string))
+		__dryrunnable_git("add", "patches/series", "patches/*.{}".format(_datetime_string))
+		__dryrunnable_git("commit", "-sm", "Kernel update {}".format(_datetime_string))
 
 def __main(args):
 	# kernel already validated in argparse
