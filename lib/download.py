@@ -33,9 +33,8 @@ class HttpDownloader():
     Download a resource over http or https using requests module
     """
 
-    def __init__(self, auth=None, headers=None):
+    def __init__(self, auth=None):
         self.auth = auth
-        self.headers = headers
 
     def validate(self, url):
         res = None
@@ -51,7 +50,6 @@ class HttpDownloader():
                 res.close()
                 res = requests.get(url,
                                    auth=self.auth,
-                                   headers=self.headers,
                                    allow_redirects=True,
                                    stream=True,
                                    verify=False)
@@ -73,15 +71,13 @@ class HttpDownloader():
         try:
             # FIXME: When requests 3.0 is released, use the enforce_content_length
             # parameter to raise an exception the file is not fully downloaded
-            print(f"DOWNLOAD: {url} {self.auth}")
             res = requests.get(url,
                                auth=self.auth,
-                               headers=self.headers,
                                allow_redirects=True,
                                stream=True,
                                verify=False)
             if res.status_code != requests.codes.OK:  # pylint: disable=no-member
-                raise HttpDownloadError(f"Unable to download {url} : {res.status_code}")
+                raise HttpDownloadError("Unable to download '%s'" % url)
             for buff in res.iter_content(HTTP_DOWNLOAD_CHUNK_SIZE):
                 yield buff
         except requests.RequestException as exc:

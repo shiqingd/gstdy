@@ -18,8 +18,7 @@ from framework.models import *
 
 from lib.download import HttpDownloader
 from lib.jenkins import (
-	JenkinsArtifactFinder,
-#    get_artifact_list,
+    get_artifact_list,
     get_build_list,
     get_lastpassed_build_number,
     get_last_good_build_by_param
@@ -221,27 +220,26 @@ class YoctoArtifacts():
         if build_number is None:
             raise ValueError("No Successful build was found for platform {} in job {}".format(platform.name, self.yoctojob.jobname))
         self.build_number = build_number
-        self.finder = JenkinsArtifactFinder()
-        self.finder.get_artifact_list(self.yoctojob.host.url, self.yoctojob.jobname, self.build_number)
-        artifacts = self.finder.artifacts
+        artifacts = get_artifact_list(self.yoctojob.host.url, self.yoctojob.jobname, self.build_number)
         self.build_number = str(self.build_number)
         self.artifact_dir = os.path.join(os.environ["WORKSPACE"], 'artifacts', self.build_number)
-        self.artifact_url = self.finder.source_url
+        self.artifact_url = '/'.join((self.yoctojob.url(), self.build_number, 'artifact'))
 
         self.artifacts = {}
         self.local_artifacts = {}
         print('\n'.join(a for a in artifacts))
         for a in artifacts:
             if re.search(r'/config-', a):
-                self.artifacts['config'] = f"{self.artifact_url}/{a}"
+                self.artifacts['config'] = "%s/%s" % (self.artifact_url, a)
                 self.local_artifacts['config'] = os.path.join(
                   self.artifact_dir, a.split('/')[-1])
-            elif re.search(r'mender-initramfs.+[0-9]{14}.*\.cpio', a):
-                self.artifacts['initramfs'] = f"{self.artifact_url}/{a}"
+#            elif re.search(r'mender-initramfs', a):
+            elif re.search(r'mender-initramfs.+rootfs.cpio', a):
+                self.artifacts['initramfs'] = "%s/%s" % (self.artifact_url, a)
                 self.local_artifacts['initramfs'] = os.path.join(
                   self.artifact_dir, a.split('/')[-1])
             elif re.search(r'intel-corei7-64.wic.bz2', a):
-                self.artifacts['osimage_url'] = f"{self.artifact_url}/{a}"
+                self.artifacts['osimage_url'] = "%s/%s" % (self.artifact_url, a)
         self.local_artifacts['done'] = os.path.join( self.artifact_dir, '.done')
         print(json.dumps(self.artifacts, indent=4))
         print(json.dumps(self.local_artifacts, indent=4))
@@ -259,11 +257,7 @@ class YoctoArtifacts():
     def download_artifacts(self):
         shutil.rmtree(self.artifact_dir, ignore_errors=True)
         os.makedirs(self.artifact_dir)
-        if 'artifactory' in self.finder.source_url:
-            downloader = HttpDownloader(headers = { "Accept" : "application/json" , "X-JFrog-Art-Api" : os.environ["SYS_OAK_CRED_ARTIFACTORY_API"]})
-        else:
-            downloader = HttpDownloader(auth = ('sys_oak', os.environ['SYS_OAK_CRED_JENKINS_API']))
-
+        downloader = HttpDownloader(auth = ('sys_oak', os.environ['SYS_OAK_CRED_JENKINS_API']))
         for f in ('config', 'initramfs',):
             downloader.download(self.artifacts[f], self.local_artifacts[f])
         Path(self.local_artifacts['done']).touch()

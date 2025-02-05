@@ -124,6 +124,47 @@ def git_diff(ref1, ref2):
 		bash_subshell("FIX DIFFS")
 
 @traceable()
+def current_branch():
+	try:
+		branch = _git("symbolic-ref", "--short", "-q", "HEAD")
+	except:
+		return ''
+	return branch.strip()
+
+
+@traceable()
+def local_branch_exists(branch):
+	branch_exists = _git("branch", "--list", branch, _tty_out=False).strip()
+	return len(branch) > 0
+
+
+@traceable()
+def cleanout_branch(branch):
+	"""
+	Check for the existence of a local branch in the git local worktree and delete it if it exists.
+	Parameters:
+	branch_name (str): The name of the local branch to check and delete.
+	Returns: None
+	"""
+
+	traceable_method(_git, "checkout", "--", ".")
+	traceable_method(_git, "clean", "-xdff")
+	cur_branch = current_branch()
+	if not cur_branch or cur_branch == branch:
+		if local_branch_exists("master"):
+			traceable_method(_git, "checkout", "master")
+		elif local_branch_exists("main"):
+			traceable_method(_git, "checkout", "main")
+	traceable_method(_git, "pull")
+
+	# Check if the local branch exists
+	if local_branch_exists(branch):
+		try:
+			traceable_method(_git, "branch", "-D", "-q", re.sub('origin/', '', branch))
+		except Exception as e:
+			print(strip_extra_newlines(str(e)))
+
+@traceable()
 def checkout(source, target): 
 	''' 
 	Check out a local (target) instance of a (source) branch.
@@ -131,6 +172,8 @@ def checkout(source, target):
 	:param source: ???
 	:param target: ???
 	:returns: None
+	'''
+
 	'''
 	try:
 		traceable_method(_git, "branch", "-D", "-q", re.sub('origin/', '', source))
@@ -141,6 +184,8 @@ def checkout(source, target):
 		traceable_method(_git, "branch", "-D", "-q", re.sub('origin/', '', target))
 	except Exception as e:
 		print(strip_extra_newlines(str(e)))
+	'''
+	cleanout_branch(target)
 
 	if not source.startswith('origin/'):
 		source = 'origin/' + source
@@ -155,7 +200,7 @@ def checkout(source, target):
 		except Exception:
 			die(strip_extra_newlines(str(e)))
 	try:
-		_git.reset("--hard").wait()
+		_git.reset("--hard")
 	except Exception as e:
 		die(strip_extra_newlines(str(e)))
 
