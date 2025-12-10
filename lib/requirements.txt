@@ -1,3 +1,4 @@
 django>=2.2.2
 jira>=2.0.1
 multi_key_dict>=2.0.3
+sqlparse>=0.5.4 # not directly required, pinned by Snyk to avoid a vulnerability
